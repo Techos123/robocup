@@ -1,0 +1,7 @@
+interface:
+  display_name: "Reusable STM32 Build"
+  short_description: "Build STM32 projects with user-defined CMake presets"
+  default_prompt: "Use $stm32-build to compile this STM32 project with its user-defined configuration and diagnose build errors."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,36 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "STM32: OpenOCD: Flash project (DAPLink)",
+            "type": "process",
+            "command": "C:\\tool\\openocd-v0.12.0-i686-w64-mingw32\\bin\\openocd.exe",
+            "args": [
+                "-s",
+                "C:\\tool\\openocd-v0.12.0-i686-w64-mingw32\\share\\openocd\\scripts",
+                "-f",
+                "interface/cmsis-dap.cfg",
+                "-c",
+                "transport select swd",
+                "-c",
+                "adapter speed 2000",
+                "-f",
+                "target/stm32h7x.cfg",
+                "-c",
+                "program {${command:cmake.buildDirectory}/robocup.elf} verify reset exit"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "clear": true,
+                "showReuseMessage": true
+            }
+        }
+    ]
+}
