@@ -529,6 +529,7 @@ void Class_Motor_DJI_GM6020::Data_Process()
     // 计算电机本身信息
     Rx_Data.Now_Angle = (float) Rx_Data.Total_Encoder / (float) ENCODER_NUM_PER_ROUND * 2.0f * PI;
     Rx_Data.Now_Omega = (float) tmp_omega * BASIC_MATH_RPM_TO_RADPS;
+    Rx_Data.Now_Current = tmp_current;
     Rx_Data.Now_Torque = tmp_current / CURRENT_TO_OUT * CURRENT_TO_TORQUE;
     Rx_Data.Now_Temperature = tmp_buffer->Temperature + BASIC_MATH_CELSIUS_TO_KELVIN;
     Rx_Data.Now_Power = power_calculate(POWER_K_0, POWER_K_1, POWER_K_2, POWER_A, Rx_Data.Now_Torque, Rx_Data.Now_Omega);
@@ -703,6 +704,7 @@ void Class_Motor_DJI_C610::Data_Process()
     // 计算电机本身信息
     Rx_Data.Now_Angle = (float) Rx_Data.Total_Encoder / (float) ENCODER_NUM_PER_ROUND * 2.0f * PI / Gearbox_Rate;
     Rx_Data.Now_Omega = (float) tmp_omega * BASIC_MATH_RPM_TO_RADPS / Gearbox_Rate;
+    Rx_Data.Now_Current = tmp_current;
     Rx_Data.Now_Torque = tmp_current / CURRENT_TO_OUT * CURRENT_TO_TORQUE * Gearbox_Rate;
     Rx_Data.Now_Temperature = tmp_buffer->Temperature + BASIC_MATH_CELSIUS_TO_KELVIN;
 
@@ -874,6 +876,7 @@ void Class_Motor_DJI_C620::Data_Process()
     // 计算电机本身信息
     Rx_Data.Now_Angle = (float) Rx_Data.Total_Encoder / (float) ENCODER_NUM_PER_ROUND * 2.0f * PI / Gearbox_Rate;
     Rx_Data.Now_Omega = (float) tmp_omega * BASIC_MATH_RPM_TO_RADPS / Gearbox_Rate;
+    Rx_Data.Now_Current = tmp_current;
     Rx_Data.Now_Torque = tmp_current / CURRENT_TO_OUT * CURRENT_TO_TORQUE * Gearbox_Rate;
     Rx_Data.Now_Temperature = tmp_buffer->Temperature + BASIC_MATH_CELSIUS_TO_KELVIN;
     Rx_Data.Now_Power = power_calculate(POWER_K_0, POWER_K_1, POWER_K_2, POWER_A, Rx_Data.Now_Torque / Gearbox_Rate, Rx_Data.Now_Omega * Gearbox_Rate);

@@ -27,10 +27,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "drv_can.h"
 #include "alg_pid.h"
-#include "sys_timestamp.h"
+#include "drv_can.h"
+#include "drv_usb.h"
 #include "dvc_motor_dji.h"
+#include "dvc_serialport_usb.h"
+#include "sys_timestamp.h"
+
 // #include "User_Code\2_Device\Serialplot\dvc_serialplot.h"
 
 /* USER CODE END Includes */
@@ -55,12 +58,20 @@
 /* USER CODE BEGIN PV */
 // Class_Serialplot serialplot;
 Class_Motor_DJI_C620 motor_3508_0x201;
-Class_PID PID_Omega;
+Class_Serialport_USB serialport_usb;
 
-float Now_Omega, Target_Omega = 50.0f * PI;
-uint32_t Counter = 0;
+float Now_Omega, Target_Omega = 2.0f;
 uint32_t Alive_Counter = 0;
 int32_t Output;
+
+static char Variable_Assignment_List[][SERIALPORT_USB_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH] = {
+    // 电机调PID
+    "p",
+    "i",
+    "d",
+    "v",
+
+};
 
 /* USER CODE END PV */
 
@@ -92,6 +103,42 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM5)
   {
     SYS_Timestamp.TIM_3600s_PeriodElapsedCallback();
+  }
+}
+
+/**
+ * @brief HAL库UART接收上位机消息DMA空闲中断
+ *
+ * @param huart UART编号
+ * @param Size 长度
+ */
+void Serialport_USB_Call_Back(uint8_t *Buffer, uint16_t Length)
+{
+  serialport_usb.USB_RxCpltCallback(Buffer, Length);
+  switch (serialport_usb.Get_Variable_Index())
+  {
+    case (0):
+    {
+      motor_3508_0x201.PID_Omega.Set_K_P(serialport_usb.Get_Variable_Value());
+      break;
+    }
+    case (1):
+    {
+      motor_3508_0x201.PID_Omega.Set_K_I(serialport_usb.Get_Variable_Value());
+      break;
+    }
+    case (2):
+    {
+      motor_3508_0x201.PID_Omega.Set_K_D(serialport_usb.Get_Variable_Value());
+      break;
+    }
+    case (3):
+    {
+      Target_Omega = serialport_usb.Get_Variable_Value();
+      break;
+    }
+    default:
+      break;
   }
 }
 
@@ -150,21 +197,27 @@ int main(void)
 
   CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
 
+  serialport_usb.Init(Serialport_USB_Call_Back,
+                      4,
+                      (char **)Variable_Assignment_List);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    Counter++;
     Alive_Counter++;
 
-    motor_3508_0x201.Set_Target_Omega(10 * sin((float)Counter / 1000.0f * 3.0f));
+    motor_3508_0x201.Set_Target_Omega(Target_Omega);
 
     motor_3508_0x201.TIM_Calculate_PeriodElapsedCallback();
 
     // 通信设备回调数据
     TIM_1ms_CAN_PeriodElapsedCallback();
+    Now_Omega = motor_3508_0x201.Get_Now_Omega();
+    serialport_usb.Set_Data(&Now_Omega, &Target_Omega);
+    serialport_usb.JustFloat_Output();
 
     if (Alive_Counter >= 100)
     {
@@ -173,6 +226,7 @@ int main(void)
     }
 
     HAL_Delay(0);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

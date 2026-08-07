@@ -7,6 +7,7 @@
  * @date 2024-01-01 1.1 官方6020驱动更新, 适配电压控制与电流控制
  * @date 2024-03-07 1.2 新增功率控制接口与相关函数
  * @date 2025-12-03 2.1 彻底抛弃6020电压控制版本, 仅保留电流控制版本, 功率控制接口移除, 后续建议通过上层或继承类实现
+ * @date 2026-8-07 2.2  增加电流接口
  *
  * @copyright USTC-RoboWalker (c) 2023-2025
  *
@@ -106,6 +107,7 @@ struct Struct_Motor_DJI_Rx_Data
 {
   float Now_Angle;
   float Now_Omega;
+  int16_t Now_Current;
   float Now_Torque;
   float Now_Temperature;
   float Now_Power;
@@ -133,6 +135,8 @@ public:
   inline float Get_Now_Angle() const;
 
   inline float Get_Now_Omega() const;
+
+  inline int16_t Get_Now_Current() const;
 
   inline float Get_Now_Torque() const;
 
@@ -264,6 +268,8 @@ public:
 
   inline float Get_Now_Omega() const;
 
+  inline int16_t Get_Now_Current() const;
+
   inline float Get_Now_Torque() const;
 
   inline uint8_t Get_Now_Temperature() const;
@@ -383,6 +389,8 @@ public:
   inline float Get_Now_Angle() const;
 
   inline float Get_Now_Omega() const;
+
+  inline int16_t Get_Now_Current() const;
 
   inline float Get_Now_Torque() const;
 
@@ -524,6 +532,16 @@ inline float Class_Motor_DJI_GM6020::Get_Now_Angle() const
 inline float Class_Motor_DJI_GM6020::Get_Now_Omega() const
 {
   return (Rx_Data.Now_Omega);
+}
+
+/**
+ * @brief 获取当前的原始电流值
+ *
+ * @return int16_t 当前的原始电流值
+ */
+inline int16_t Class_Motor_DJI_GM6020::Get_Now_Current() const
+{
+  return (Rx_Data.Now_Current);
 }
 
 /**
@@ -713,6 +731,16 @@ inline float Class_Motor_DJI_C610::Get_Now_Omega() const
 }
 
 /**
+ * @brief 获取当前的原始电流值
+ *
+ * @return int16_t 当前的原始电流值
+ */
+inline int16_t Class_Motor_DJI_C610::Get_Now_Current() const
+{
+  return (Rx_Data.Now_Current);
+}
+
+/**
  * @brief 获取当前的扭矩, Nm
  *
  * @return float 当前的扭矩, Nm
@@ -880,6 +908,16 @@ inline float Class_Motor_DJI_C620::Get_Now_Angle() const
 inline float Class_Motor_DJI_C620::Get_Now_Omega() const
 {
   return (Rx_Data.Now_Omega);
+}
+
+/**
+ * @brief 获取当前的原始电流值
+ *
+ * @return int16_t 当前的原始电流值
+ */
+inline int16_t Class_Motor_DJI_C620::Get_Now_Current() const
+{
+  return (Rx_Data.Now_Current);
 }
 
 /**

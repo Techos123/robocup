@@ -59,6 +59,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Code/1_Middleware/3_System/Timestamp/sys_timestamp.cpp
     Code/2_Device/Motor/Motor_DJI/dvc_motor_dji.cpp
     Code/1_Middleware/2_Algorithm/Basic/alg_basic.cpp
+    Code/1_Middleware/1_Driver/USB/drv_usb.cpp
+    Code/2_Device/ROS/dvc_serialport_usb.cpp
+    
 )
 
 # Add include paths
@@ -69,6 +72,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Code/1_Middleware/3_System/Timestamp
     Code/2_Device/Motor/Motor_DJI
     Code/1_Middleware/2_Algorithm/Basic
+    Code/1_Middleware/1_Driver/USB
+    Code/2_Device/ROS
+    
 )
 
 # Add project symbols (macros)

@@ -1,0 +1,231 @@
+#ifndef CRT_MW_H
+#define CRT_MW_H
+
+#include "dvc_motor_dji.h"
+
+/**
+ * @brief 底盘控制类型
+ *
+ */
+enum Enum_Chassis_Control_Type
+{
+  Chassis_Control_Type_DISABLE = 0,
+  Chassis_Control_Type_NORMAL,
+};
+
+class Class_Chassis_MW
+{
+public:
+  // 底盘速度值PID
+  Class_PID PID_Velocity_X;
+
+  // 底盘速度方向PID
+  Class_PID PID_Velocity_Y;
+
+  // 底盘角速度PID
+  Class_PID PID_Omega;
+
+  // 底盘yaw角速度PID
+  Class_PID PID_YawSpeed;
+
+  // 底盘yaw角度PID（外层角度环）
+  Class_PID PID_YawAngle;
+
+  // 底盘陀螺仪
+  Class_AHRS_WHEELTEC *AHRS_Chassis;
+
+  // 底盘电机
+  Class_Motor_DJI_C620 Motor_Wheel[4];
+
+  inline Enum_Chassis_Control_Type Get_Chassis_Control_Type();
+
+  inline float Get_Now_Velocity_X();
+  inline float Get_Now_Velocity_Y();
+  inline float Get_Now_Omega();
+
+  inline float Get_Target_Velocity_X();
+  inline float Get_Target_Velocity_Y();
+  inline float Get_Target_Omega();
+
+  inline void Set_Target_Velocity_X(float __Target_Velocity_X);
+  inline void Set_Target_Velocity_Y(float __Target_Velocity_Y);
+  inline void Set_Target_Omega(float __Target_Omega);
+  inline void Set_Target_Angle(float __Target_Angle);
+
+  inline void Set_Chassis_Control_Type(Enum_Chassis_Control_Type __Chassis_Control_Type);
+
+  void Init(Class_AHRS_WHEELTEC *__AHRS);
+  void TIM_100ms_Alive_PeriodElapsedCallback();
+  void TIM_2ms_Resolution_PeriodElapsedCallback();
+  void TIM_2ms_Control_PeriodElapsedCallback();
+
+protected:
+  // 初始化相关常量
+
+  // 常量
+  float robot_mass = 20.0f; // 机器人质量
+  // 轮组半径
+  const float Wheel_Radius = 0.077f;
+  // 轮组投影点坐标x
+  const float Wheel_Point_X = 0.36693f;
+  // 轮组投影点坐标y
+  const float Wheel_Point_Y = 0.41638f;
+
+  // 当前速度X
+  float Now_Velocity_X = 0.0f;
+  // 当前速度Y
+  float Now_Velocity_Y = 0.0f;
+  // 当前角速度
+  float Now_Omega = 0.0f;
+
+  // 目标速度X
+  float Target_Velocity_X = 0.0f;
+  // 目标速度Y
+  float Target_Velocity_Y = 0.0f;
+  // 目标角速度
+  float Target_Omega = 0.0f;
+  // 目标航向角（平动时用于锁定航向）
+  float Target_Angle = 0.0f;
+
+  // 底盘相对Odom角度
+  float Angle_Pitch = 0.0f;
+  float Angle_Roll = 0.0f;
+  float Angle_Yaw = 0.0f;
+
+  // 斜坡pitch角
+  float Slope_Pitch = 0.0f;
+
+  // 轮向电机角速度目标值
+  float Target_Wheel_Omega[4];
+  // 轮向电机电流目标值
+  float Target_Wheel_Current[4];
+
+  // 底盘控制方法
+  Enum_Chassis_Control_Type Chassis_Control_Type = Chassis_Control_Type_DISABLE;
+
+  void Self_Resolution();
+
+  void Output_To_Dynamics();
+
+  void Dynamics_Inverse_Resolution();
+
+  void Output_To_Motor();
+};
+
+/**
+ * @brief 获取当前速度X
+ *
+ * @return float 当前速度X
+ */
+inline float
+Class_Chassis_MW::Get_Now_Velocity_X()
+{
+  return (Now_Velocity_X);
+}
+
+/**
+ * @brief 获取当前速度Y
+ *
+ * @return float 当前速度Y
+ */
+inline float Class_Chassis_MW::Get_Now_Velocity_Y()
+{
+  return (Now_Velocity_Y);
+}
+
+/**
+ * @brief 获取当前角速度
+ *
+ * @return float 当前角速度
+ */
+inline float Class_Chassis_MW::Get_Now_Omega()
+{
+  return (Now_Omega);
+}
+
+/**
+ * @brief 获取底盘控制方法
+ *
+ * @return Enum_Chassis_Control_Type 底盘控制方法
+ */
+inline Enum_Chassis_Control_Type Class_Chassis_MW::Get_Chassis_Control_Type()
+{
+  return (Chassis_Control_Type);
+}
+
+/**
+ * @brief 获取目标速度X
+ *
+ * @return float 目标速度X
+ */
+inline float Class_Chassis_MW::Get_Target_Velocity_X()
+{
+  return (Target_Velocity_X);
+}
+
+/**
+ * @brief 获取目标速度Y
+ *
+ * @return float 目标速度Y
+ */
+inline float Class_Chassis_MW::Get_Target_Velocity_Y()
+{
+  return (Target_Velocity_Y);
+}
+
+/**
+ * @brief 获取目标速度方向
+ *
+ * @return float 目标速度方向
+ */
+inline float Class_Chassis_MW::Get_Target_Omega()
+{
+  return (Target_Omega);
+}
+
+/**
+ * @brief 设定底盘控制方法
+ *
+ * @param __Chassis_Control_Type 底盘控制方法
+ */
+inline void Class_Chassis_MW::Set_Chassis_Control_Type(Enum_Chassis_Control_Type __Chassis_Control_Type)
+{
+  Chassis_Control_Type = __Chassis_Control_Type;
+}
+
+/**
+ * @brief 设定目标速度X
+ *
+ * @param __Target_Velocity_X 目标速度X
+ */
+inline void Class_Chassis_MW::Set_Target_Velocity_X(float __Target_Velocity_X)
+{
+  Target_Velocity_X = __Target_Velocity_X;
+}
+
+/**
+ * @brief 设定目标速度Y
+ *
+ * @param __Target_Velocity_Y 目标速度Y
+ */
+inline void Class_Chassis_MW::Set_Target_Velocity_Y(float __Target_Velocity_Y)
+{
+  Target_Velocity_Y = __Target_Velocity_Y;
+}
+
+/**
+ * @brief 设定目标角速度
+ *
+ * @param __Target_Omega 目标角速度
+ */
+inline void Class_Chassis_MW::Set_Target_Omega(float __Target_Omega)
+{
+  Target_Omega = __Target_Omega;
+}
+
+inline void Class_Chassis_MW::Set_Target_Angle(float __Target_Angle)
+{
+  Target_Angle = __Target_Angle;
+}
+
+#endif
