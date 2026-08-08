@@ -1,6 +1,7 @@
-#ifndef CRT_MW_H
-#define CRT_MW_H
+#ifndef CRT_FW_H
+#define CRT_FW_H
 
+#include "dvc_ahrs_wheeltec.h"
 #include "dvc_motor_dji.h"
 
 /**
@@ -13,7 +14,7 @@ enum Enum_Chassis_Control_Type
   Chassis_Control_Type_NORMAL,
 };
 
-class Class_Chassis_MW
+class Class_Chassis_FW
 {
 public:
   // 底盘速度值PID
@@ -40,15 +41,12 @@ public:
   inline Enum_Chassis_Control_Type Get_Chassis_Control_Type();
 
   inline float Get_Now_Velocity_X();
-  inline float Get_Now_Velocity_Y();
   inline float Get_Now_Omega();
 
   inline float Get_Target_Velocity_X();
-  inline float Get_Target_Velocity_Y();
   inline float Get_Target_Omega();
 
   inline void Set_Target_Velocity_X(float __Target_Velocity_X);
-  inline void Set_Target_Velocity_Y(float __Target_Velocity_Y);
   inline void Set_Target_Omega(float __Target_Omega);
   inline void Set_Target_Angle(float __Target_Angle);
 
@@ -62,14 +60,12 @@ public:
 protected:
   // 初始化相关常量
 
-  // 常量
-  float robot_mass = 20.0f; // 机器人质量
   // 轮组半径
-  const float Wheel_Radius = 0.077f;
+  const float Wheel_Radius = 0.0525f;
   // 轮组投影点坐标x
-  const float Wheel_Point_X = 0.36693f;
+  const float Wheel_Point_X = 0.100f;
   // 轮组投影点坐标y
-  const float Wheel_Point_Y = 0.41638f;
+  const float Wheel_Point_Y = 0.150f;
 
   // 当前速度X
   float Now_Velocity_X = 0.0f;
@@ -92,8 +88,6 @@ protected:
   float Angle_Roll = 0.0f;
   float Angle_Yaw = 0.0f;
 
-  // 斜坡pitch角
-  float Slope_Pitch = 0.0f;
 
   // 轮向电机角速度目标值
   float Target_Wheel_Omega[4];
@@ -118,27 +112,18 @@ protected:
  * @return float 当前速度X
  */
 inline float
-Class_Chassis_MW::Get_Now_Velocity_X()
+Class_Chassis_FW::Get_Now_Velocity_X()
 {
   return (Now_Velocity_X);
 }
 
-/**
- * @brief 获取当前速度Y
- *
- * @return float 当前速度Y
- */
-inline float Class_Chassis_MW::Get_Now_Velocity_Y()
-{
-  return (Now_Velocity_Y);
-}
 
 /**
  * @brief 获取当前角速度
  *
  * @return float 当前角速度
  */
-inline float Class_Chassis_MW::Get_Now_Omega()
+inline float Class_Chassis_FW::Get_Now_Omega()
 {
   return (Now_Omega);
 }
@@ -148,7 +133,7 @@ inline float Class_Chassis_MW::Get_Now_Omega()
  *
  * @return Enum_Chassis_Control_Type 底盘控制方法
  */
-inline Enum_Chassis_Control_Type Class_Chassis_MW::Get_Chassis_Control_Type()
+inline Enum_Chassis_Control_Type Class_Chassis_FW::Get_Chassis_Control_Type()
 {
   return (Chassis_Control_Type);
 }
@@ -158,27 +143,19 @@ inline Enum_Chassis_Control_Type Class_Chassis_MW::Get_Chassis_Control_Type()
  *
  * @return float 目标速度X
  */
-inline float Class_Chassis_MW::Get_Target_Velocity_X()
+inline float Class_Chassis_FW::Get_Target_Velocity_X()
 {
   return (Target_Velocity_X);
 }
 
-/**
- * @brief 获取目标速度Y
- *
- * @return float 目标速度Y
- */
-inline float Class_Chassis_MW::Get_Target_Velocity_Y()
-{
-  return (Target_Velocity_Y);
-}
+
 
 /**
  * @brief 获取目标速度方向
  *
  * @return float 目标速度方向
  */
-inline float Class_Chassis_MW::Get_Target_Omega()
+inline float Class_Chassis_FW::Get_Target_Omega()
 {
   return (Target_Omega);
 }
@@ -188,7 +165,7 @@ inline float Class_Chassis_MW::Get_Target_Omega()
  *
  * @param __Chassis_Control_Type 底盘控制方法
  */
-inline void Class_Chassis_MW::Set_Chassis_Control_Type(Enum_Chassis_Control_Type __Chassis_Control_Type)
+inline void Class_Chassis_FW::Set_Chassis_Control_Type(Enum_Chassis_Control_Type __Chassis_Control_Type)
 {
   Chassis_Control_Type = __Chassis_Control_Type;
 }
@@ -198,19 +175,9 @@ inline void Class_Chassis_MW::Set_Chassis_Control_Type(Enum_Chassis_Control_Type
  *
  * @param __Target_Velocity_X 目标速度X
  */
-inline void Class_Chassis_MW::Set_Target_Velocity_X(float __Target_Velocity_X)
+inline void Class_Chassis_FW::Set_Target_Velocity_X(float __Target_Velocity_X)
 {
   Target_Velocity_X = __Target_Velocity_X;
-}
-
-/**
- * @brief 设定目标速度Y
- *
- * @param __Target_Velocity_Y 目标速度Y
- */
-inline void Class_Chassis_MW::Set_Target_Velocity_Y(float __Target_Velocity_Y)
-{
-  Target_Velocity_Y = __Target_Velocity_Y;
 }
 
 /**
@@ -218,12 +185,12 @@ inline void Class_Chassis_MW::Set_Target_Velocity_Y(float __Target_Velocity_Y)
  *
  * @param __Target_Omega 目标角速度
  */
-inline void Class_Chassis_MW::Set_Target_Omega(float __Target_Omega)
+inline void Class_Chassis_FW::Set_Target_Omega(float __Target_Omega)
 {
   Target_Omega = __Target_Omega;
 }
 
-inline void Class_Chassis_MW::Set_Target_Angle(float __Target_Angle)
+inline void Class_Chassis_FW::Set_Target_Angle(float __Target_Angle)
 {
   Target_Angle = __Target_Angle;
 }
