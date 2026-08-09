@@ -28,17 +28,17 @@ Class_Power BSP_Power;
 /**
  * @brief 初始化电源
  *
- * @param __DC24_0 DC24V_0输出
- * @param __DC24_1 DC24V_1输出
- * @param __DC5 DC5V输出
+ * @param dc24_0_status DC24V_0输出
+ * @param dc24_1_status DC24V_1输出
+ * @param dc5_status DC5V输出
  */
-void Class_Power::Init(const bool &__DC24_0_Status, const bool &__DC24_1_Status, const bool &__DC5_Status)
+void Class_Power::Init(bool dc24_0_status, bool dc24_1_status, bool dc5_status)
 {
-    ADC_Manage_Object = &ADC1_Manage_Object;
+    // ADC_Manage_Object = &ADC1_Manage_Object;
 
-    HAL_GPIO_WritePin(DC24_0__OUTPUT_GPIO_Port, DC24_0__OUTPUT_Pin, __DC24_0_Status ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DC24_1__OUTPUT_GPIO_Port, DC24_1__OUTPUT_Pin, __DC24_1_Status ? GPIO_PIN_SET : GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(DC5__OUTPUT_GPIO_Port, DC5__OUTPUT_Pin, __DC5_Status ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    Set_DC24_0(dc24_0_status);
+    Set_DC24_1(dc24_1_status);
+    Set_DC5(dc5_status);
 }
 
 /************************ COPYRIGHT(C) USTC-ROBOWALKER **************************/

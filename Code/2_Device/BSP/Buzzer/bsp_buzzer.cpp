@@ -10,9 +10,9 @@
  */
 
 /**
- * Cube中, 主频240M, psc240, arr250, 对应freq4000Hz
- * 原则上满足, arr * freq = 1MHz
- * 因此, freq = 1MHz / arr
+ * Cube中, TIM12定时器时钟275MHz, PSC = 275 - 1, 计数频率为1MHz
+ * PWM频率满足 freq = 1MHz / (ARR + 1)
+ * 因此, 4000Hz对应 ARR = 250 - 1
  *
  * 此外, 该蜂鸣器有效音域为G3~ A7
  */
@@ -173,11 +173,7 @@ void Class_Buzzer::Init(const float &__Frequency, const float &__Loudness)
     Frequency = Basic_Math_Constrain(__Frequency, 0.0f, 20000.0f);
     Loudness = Basic_Math_Constrain(__Loudness, 0.0f, 1.0f);
 
-    float arr = 1000000.0f / Frequency;
-    __HAL_TIM_SetAutoreload(htim, arr);
-
-    float ccr = arr * Loudness * 0.5f;
-    __HAL_TIM_SetCompare(htim, TIM_Channel, ccr);
+    Update_Output();
 
     HAL_TIM_PWM_Start(htim, TIM_Channel);
 }

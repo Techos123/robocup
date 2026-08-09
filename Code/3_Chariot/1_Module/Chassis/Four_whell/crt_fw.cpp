@@ -21,31 +21,31 @@ void Class_Chassis_FW::Init(Class_AHRS_WHEELTEC *__AHRS)
   // PID初始化
 
   // 底盘速度xPID, 输出摩擦力
-  PID_Velocity_X.Init(7.0f, 0.0f, 0.0f, 1.3f, 2.0f, 8.0f, 0.002f);
+  PID_Velocity_X.Init(7.0f, 0.0f, 0.0f, 1.3f, 2.0f, 1.5f, 0.002f);
 
   // 底盘角速度PID, 输出扭矩
-  PID_Omega.Init(4.0f, 0.0f, 0.0f, 2.3f, 2.0f, 8.0f, 0.002f);
+  PID_Omega.Init(4.0f, 0.0f, 0.0f, 2.3f, 2.0f, 1.5f, 0.002f);
 
   // 底盘yaw角速度PID, 输出扭矩
-  PID_YawSpeed.Init(4.9f, 0.0f, 0.0f, 0.0f, 0.5f, 2.0f, 0.002f);
+  PID_YawSpeed.Init(4.9f, 0.0f, 0.0f, 0.0f, 0.5f, 1.5f, 0.002f);
 
   // 底盘yaw角度PID, 输出角速度
-  PID_YawAngle.Init(7.4f, 2.4f, 0.0f, 0.2f, 0.5f, 2.0f, 0.002f, 0.01f);
+  PID_YawAngle.Init(7.4f, 2.4f, 0.0f, 0.2f, 1.5f, 0.5f, 0.002f, 0.01f);
 
   // 电机初始化
   Motor_Wheel[0].Init(&hfdcan3, Motor_DJI_ID_0x201, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[0].PID_Omega.Init(0.4f, 1.0f, 0.0f, 0.0f, 2.0f, 8.0f, 0.002f);
+  Motor_Wheel[0].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
   // 电机初始化
   Motor_Wheel[1].Init(&hfdcan3, Motor_DJI_ID_0x202, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[1].PID_Omega.Init(0.4f, 1.0f, 0.0f, 0.0f, 2.0f, 8.0f, 0.002f);
+  Motor_Wheel[1].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
 
   // 电机初始化
   Motor_Wheel[2].Init(&hfdcan3, Motor_DJI_ID_0x203, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[2].PID_Omega.Init(0.4f, 1.0f, 0.0f, 0.0f, 2.0f, 8.0f, 0.002f);
+  Motor_Wheel[2].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
 
   // 电机初始化
   Motor_Wheel[3].Init(&hfdcan3, Motor_DJI_ID_0x204, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[3].PID_Omega.Init(0.4f, 1.0f, 0.0f, 0.0f, 2.0f, 8.0f, 0.002f);
+  Motor_Wheel[3].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
 }
 
 /**
@@ -182,7 +182,7 @@ void Class_Chassis_FW::Output_To_Motor()
       for (int i = 0; i < 4; i++)
       {
 
-        Motor_Wheel[i].Set_Target_Current(0.0f);
+        Motor_Wheel[i].Set_Target_Omega(0.0f);
       }
 
       break;

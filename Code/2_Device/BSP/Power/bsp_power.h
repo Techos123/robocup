@@ -14,7 +14,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 
-#include "1_Middleware/Driver/ADC/drv_adc.h"
+// #include "1_Middleware/Driver/ADC/drv_adc.h"
 #include "gpio.h"
 #include "stm32h7xx_hal.h"
 
@@ -29,21 +29,21 @@
 class Class_Power
 {
 public:
-    void Init(const bool &__DC24_0_Status = false, const bool &__DC24_1_Status = false, const bool &__DC5_Status = false);
+    void Init(bool dc24_0_status = false, bool dc24_1_status = false, bool dc5_status = false);
 
     inline float Get_Power_Voltage() const;
 
-    inline void Set_DC24_0(const bool &__Status);
+    inline void Set_DC24_0(bool status);
 
-    inline void Set_DC24_1(const bool &__Status);
+    inline void Set_DC24_1(bool status);
 
-    inline void Set_DC5(const bool &__Status);
+    inline void Set_DC5(bool status);
 
 protected:
     // 初始化相关常量
 
     // 绑定的ADC
-    Struct_ADC_Manage_Object *ADC_Manage_Object;
+    // Struct_ADC_Manage_Object *ADC_Manage_Object;
     // 绑定的ADC缓冲区偏移量
     uint16_t ADC_Buffer_Offset = 0;
 
@@ -71,44 +71,44 @@ extern Class_Power BSP_Power;
  *
  * @return float 电源电压, 单位V
  */
-inline float Class_Power::Get_Power_Voltage() const
-{
-    // 读取ADC值, 偏移量为0
-    uint32_t adc_value = ADC_Manage_Object->ADC_Data[ADC_Buffer_Offset];
-    // 计算电压, 假设ADC分辨率为16位,
-    float voltage = ((float) (adc_value) / (float) (1 << 16)) * 3.3f * 11.0f;
-    // 返回电压值
-    return (voltage);
-}
+// inline float Class_Power::Get_Power_Voltage() const
+// {
+//     // 读取ADC值, 偏移量为0
+//     uint32_t adc_value = ADC_Manage_Object->ADC_Data[ADC_Buffer_Offset];
+//     // 计算电压, 假设ADC分辨率为16位,
+//     float voltage = ((float) (adc_value) / (float) (1 << 16)) * 3.3f * 11.0f;
+//     // 返回电压值
+//     return (voltage);
+// }
 
 /**
  * @brief 设置DC24V_0输出
  *
- * @param __DC24_0 true: 输出, false: 不输出
+ * @param status true: 输出, false: 不输出
  */
-inline void Class_Power::Set_DC24_0(const bool &__Status)
+inline void Class_Power::Set_DC24_0(bool status)
 {
-    HAL_GPIO_WritePin(DC24_0__OUTPUT_GPIO_Port, DC24_0__OUTPUT_Pin, __Status ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(DC24_0_GPIO_Port, DC24_0_Pin, status ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 /**
  * @brief 设置DC24V_1输出
  *
- * @param __DC24_1 true: 输出, false: 不输出
+ * @param status true: 输出, false: 不输出
  */
-inline void Class_Power::Set_DC24_1(const bool &__Status)
+inline void Class_Power::Set_DC24_1(bool status)
 {
-    HAL_GPIO_WritePin(DC24_1__OUTPUT_GPIO_Port, DC24_1__OUTPUT_Pin, __Status ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(DC24_1_GPIO_Port, DC24_1_Pin, status ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 /**
  * @brief 设置DC5V输出
  *
- * @param __DC5 true: 输出, false: 不输出
+ * @param status true: 输出, false: 不输出
  */
-inline void Class_Power::Set_DC5(const bool &__Status)
+inline void Class_Power::Set_DC5(bool status)
 {
-    HAL_GPIO_WritePin(DC5__OUTPUT_GPIO_Port, DC5__OUTPUT_Pin, __Status ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(DC5_GPIO_Port, DC5_Pin, status ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 #endif

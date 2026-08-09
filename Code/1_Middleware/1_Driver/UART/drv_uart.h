@@ -56,8 +56,8 @@ extern Struct_UART_Manage_Object UART3_Manage_Object;
 extern Struct_UART_Manage_Object UART4_Manage_Object;
 extern Struct_UART_Manage_Object UART5_Manage_Object;
 extern Struct_UART_Manage_Object UART6_Manage_Object;
-// extern Struct_UART_Manage_Object UART7_Manage_Object;
-// extern Struct_UART_Manage_Object UART8_Manage_Object;
+extern Struct_UART_Manage_Object UART7_Manage_Object;
+extern Struct_UART_Manage_Object UART10_Manage_Object;
 
 /* Exported function declarations --------------------------------------------*/
 

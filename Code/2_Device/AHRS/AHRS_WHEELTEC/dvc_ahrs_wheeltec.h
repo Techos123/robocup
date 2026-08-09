@@ -174,11 +174,19 @@ protected:
 
     // 常量
 
+    static constexpr uint16_t FRAME_DATA_OFFSET = 7U;
+    static constexpr uint16_t FRAME_REAR_LENGTH = 1U;
+    static constexpr uint16_t FRAME_BUFFER_SIZE = sizeof(Struct_AHRS_WHEELTEC_UART_Data);
+
     // 内部变量
 
-    // 当前时刻的WHEELTEC姿态传感器接收flag
-    uint32_t Flag = 0;
-    // 前一时刻的WHEELTEC姿态传感器接收flag
+    // 跨UART回调保存尚未组成完整帧的数据
+    uint8_t Rx_Stream_Buffer[FRAME_BUFFER_SIZE] = {};
+    uint16_t Rx_Stream_Length = 0;
+
+    // 当前时刻的WHEELTEC有效AHRS帧计数
+    volatile uint32_t Flag = 0;
+    // 前一时刻的WHEELTEC有效AHRS帧计数
     uint32_t Pre_Flag = 0;
 
     // 读变量
@@ -214,7 +222,11 @@ protected:
 
     uint16_t Verify_CRC_16(uint8_t *Message, uint32_t Length);
 
-    void Data_Process();
+    void Data_Process(const uint8_t *Rx_Data, uint16_t Length);
+
+    bool Try_Process_Frame();
+
+    void Discard_Stream_Prefix(uint16_t Length);
 };
 
 /* Exported function declarations --------------------------------------------*/

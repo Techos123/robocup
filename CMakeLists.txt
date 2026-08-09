@@ -62,8 +62,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Code/1_Middleware/1_Driver/USB/drv_usb.cpp
     Code/2_Device/ROS/dvc_serialport_usb.cpp
     Code/2_Device/AHRS/AHRS_WHEELTEC/dvc_ahrs_wheeltec.cpp
-    # Code/3_Chariot/1_Module/Chassis/Four_whell/crt_fw.cpp
+    Code/2_Device/BSP/Buzzer/bsp_buzzer.cpp
+    Code/3_Chariot/1_Module/Chassis/Four_whell/crt_fw.cpp
     Code/1_Middleware/1_Driver/UART/drv_uart.cpp
+    Code/2_Device/BSP/Power/bsp_power.cpp
 )
 
 # Add include paths
@@ -79,8 +81,11 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Code/2_Device/ROS
     Code/2_Device/AHRS/AHRS_WHEELTEC
     Code/2_Device/Motor/Motor_DJI
+    Code/2_Device/BSP/Buzzer
+    Code/2_Device/BSP/Power
+    
+    Code/3_Chariot/1_Module/Chassis/Four_whell
 
-    # Code/3_Chariot/1_Module/Chassis/Four_whell
 )
 
 # Add project symbols (macros)

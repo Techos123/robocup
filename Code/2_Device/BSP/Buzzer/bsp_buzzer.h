@@ -1,18 +1,8 @@
-/**
- * @file bsp_buzzer.h
- * @author yssickjgd (1345578933@qq.com)
- * @brief 板载蜂鸣器
- * @version 0.1
- * @date 2025-08-15 0.1 新建文档
- *
- * @copyright USTC-RoboWalker (c) 2025
- *
- */
 
 /**
- * Cube中, 主频240M, psc240, arr250, 对应freq4000Hz
- * 原则上满足, arr * freq = 1MHz
- * 因此, freq = 1MHz / arr
+ * Cube中, TIM12定时器时钟275MHz, PSC = 275 - 1, 计数频率为1MHz
+ * PWM频率满足 freq = 1MHz / (ARR + 1)
+ * 因此, 4000Hz对应 ARR = 250 - 1
  *
  * 此外, 该蜂鸣器有效音域为G3~ A7
  */
@@ -22,9 +12,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 
-#include "1_Middleware/Algorithm/Basic/alg_basic.h"
-#include "tim.h"
+#include "alg_basic.h"
 #include "stm32h7xx_hal.h"
+#include "tim.h"
 
 /* Exported macros -----------------------------------------------------------*/
 
@@ -162,39 +152,40 @@ extern const float BUZZER_FREQUENCY_C8;
 class Class_Buzzer
 {
 public:
-    void Init(const float &__Frequency = 4000.0f, const float &__Loudness = 0.0f);
+  void Init(const float &__Frequency = 4000.0f, const float &__Loudness = 0.0f);
 
-    inline void Set_Frequency(const float &__Frequency);
+  inline void Set_Frequency(const float &__Frequency);
 
-    inline void Set_Loudness(const float &__Loudness);
+  inline void Set_Loudness(const float &__Loudness);
 
-    inline void Set_Sound(const float &__Frequency, const float &__Loudness);
+  inline void Set_Sound(const float &__Frequency, const float &__Loudness);
 
 protected:
-    // 初始化相关常量
+  // 初始化相关常量
 
-    // 绑定的定时器
-    TIM_HandleTypeDef *htim;
-    // 绑定的定时器通道
-    uint32_t TIM_Channel;
+  // 绑定的定时器
+  TIM_HandleTypeDef *htim;
+  // 绑定的定时器通道
+  uint32_t TIM_Channel;
 
-    // 常量
+  // 常量
 
-    // 内部变量
+  // 内部变量
 
-    // 读变量
+  // 读变量
 
-    // 写变量
+  // 写变量
 
-    // 蜂鸣器频率
-    float Frequency = 4000;
-    // 蜂鸣器响度
-    float Loudness = 0.0f;
+  // 蜂鸣器频率
+  float Frequency = 4000;
+  // 蜂鸣器响度
+  float Loudness = 0.0f;
 
+  // 读写变量
 
-    // 读写变量
+  // 内部函数
 
-    // 内部函数
+  inline void Update_Output();
 };
 
 /* Exported variables --------------------------------------------------------*/
@@ -204,26 +195,31 @@ extern Class_Buzzer BSP_Buzzer;
 /* Exported function declarations --------------------------------------------*/
 
 /**
+ * @brief 根据当前频率和响度更新PWM周期与比较值
+ */
+inline void Class_Buzzer::Update_Output()
+{
+  uint32_t period_ticks = 1U;
+  uint32_t compare_ticks = 0U;
+
+  if (Frequency > 0.0f)
+  {
+    period_ticks = static_cast<uint32_t>(1000000.0f / Frequency + 0.5f);
+    compare_ticks = static_cast<uint32_t>(period_ticks * Loudness * 0.5f + 0.5f);
+  }
+
+  __HAL_TIM_SetAutoreload(htim, period_ticks - 1U);
+  __HAL_TIM_SetCompare(htim, TIM_Channel, compare_ticks);
+}
+
+/**
  * @brief 设置蜂鸣器频率
  * @param __Frequency 蜂鸣器频率, 单位Hz
  */
 inline void Class_Buzzer::Set_Frequency(const float &__Frequency)
 {
-    Frequency = Basic_Math_Constrain(__Frequency, 0.0f, 20000.0f);
-
-    float arr;
-    if (Frequency == 0.0f)
-    {
-        arr = 0.0f;
-    }
-    else
-    {
-        arr = 1000000.0f / Frequency;
-    }
-    __HAL_TIM_SetAutoreload(htim, arr);
-
-    float ccr = arr * Loudness * 0.5f;
-    __HAL_TIM_SetCompare(htim, TIM_Channel, ccr);
+  Frequency = Basic_Math_Constrain(__Frequency, 0.0f, 20000.0f);
+  Update_Output();
 }
 
 /**
@@ -233,22 +229,8 @@ inline void Class_Buzzer::Set_Frequency(const float &__Frequency)
  */
 inline void Class_Buzzer::Set_Loudness(const float &__Loudness)
 {
-    Loudness = Basic_Math_Constrain(__Loudness, 0.0f, 1.0f);
-
-    float arr;
-    if (Frequency == 0.0f)
-    {
-        arr = 0.0f;
-    }
-    else
-    {
-        arr = 1000000.0f / Frequency;
-    }
-    __HAL_TIM_SetAutoreload(htim, arr);
-
-    float ccr = arr * Loudness * 0.5f;
-    __HAL_TIM_SetCompare(htim, TIM_Channel, ccr);
-    Loudness = Basic_Math_Constrain(__Loudness, 0.0f, 1.0f);
+  Loudness = Basic_Math_Constrain(__Loudness, 0.0f, 1.0f);
+  Update_Output();
 }
 
 /**
@@ -259,22 +241,9 @@ inline void Class_Buzzer::Set_Loudness(const float &__Loudness)
  */
 void Class_Buzzer::Set_Sound(const float &__Frequency, const float &__Loudness)
 {
-    Frequency = Basic_Math_Constrain(__Frequency, 0.0f, 20000.0f);
-    Loudness = Basic_Math_Constrain(__Loudness, 0.0f, 1.0f);
-
-    float arr;
-    if (Frequency == 0.0f)
-    {
-        arr = 0.0f;
-    }
-    else
-    {
-        arr = 1000000.0f / Frequency;
-    }
-    __HAL_TIM_SetAutoreload(htim, arr);
-
-    float ccr = arr * Loudness * 0.5f;
-    __HAL_TIM_SetCompare(htim, TIM_Channel, ccr);
+  Frequency = Basic_Math_Constrain(__Frequency, 0.0f, 20000.0f);
+  Loudness = Basic_Math_Constrain(__Loudness, 0.0f, 1.0f);
+  Update_Output();
 }
 
 #endif

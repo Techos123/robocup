@@ -20,16 +20,19 @@
 #include "main.h"
 #include "dma.h"
 #include "fdcan.h"
+#include "gpio.h"
 #include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
-#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "alg_pid.h"
+#include "bsp_power.h"
+#include "crt_fw.h"
 #include "drv_can.h"
 #include "drv_usb.h"
+#include "dvc_ahrs_wheeltec.h"
 #include "dvc_motor_dji.h"
 #include "dvc_serialport_usb.h"
 #include "sys_timestamp.h"
@@ -57,10 +60,11 @@
 
 /* USER CODE BEGIN PV */
 // Class_Serialplot serialplot;
-Class_Motor_DJI_C620 motor_3508_0x201;
 Class_Serialport_USB serialport_usb;
-
+Class_AHRS_WHEELTEC wt;
+Class_Chassis_FW car;
 float Now_Omega, Target_Omega = 2.0f;
+float Yaw, Pitch, Roll;
 uint32_t Alive_Counter = 0;
 int32_t Output;
 
@@ -89,7 +93,22 @@ void CAN3_Motor_Call_Back(FDCAN_RxHeaderTypeDef &Header, uint8_t *Buffer)
   {
     case (0x201):
     {
-      motor_3508_0x201.CAN_RxCpltCallback();
+      car.Motor_Wheel[0].CAN_RxCpltCallback();
+      break;
+    }
+    case (0x202):
+    {
+      car.Motor_Wheel[1].CAN_RxCpltCallback();
+      break;
+    }
+    case (0x203):
+    {
+      car.Motor_Wheel[2].CAN_RxCpltCallback();
+      break;
+    }
+    case (0x204):
+    {
+      car.Motor_Wheel[3].CAN_RxCpltCallback();
       break;
     }
     default:
@@ -116,37 +135,48 @@ void Serialport_USB_Call_Back(uint8_t *Buffer, uint16_t Length)
   serialport_usb.USB_RxCpltCallback(Buffer, Length);
   switch (serialport_usb.Get_Variable_Index())
   {
-    case (0):
-    {
-      motor_3508_0x201.PID_Omega.Set_K_P(serialport_usb.Get_Variable_Value());
-      break;
-    }
-    case (1):
-    {
-      motor_3508_0x201.PID_Omega.Set_K_I(serialport_usb.Get_Variable_Value());
-      break;
-    }
-    case (2):
-    {
-      motor_3508_0x201.PID_Omega.Set_K_D(serialport_usb.Get_Variable_Value());
-      break;
-    }
-    case (3):
-    {
-      Target_Omega = serialport_usb.Get_Variable_Value();
-      break;
-    }
+    // case (0):
+    // {
+    //   motor_3508_0x201.PID_Omega.Set_K_P(serialport_usb.Get_Variable_Value());
+    //   break;
+    // }
+    // case (1):
+    // {
+    //   motor_3508_0x201.PID_Omega.Set_K_I(serialport_usb.Get_Variable_Value());
+    //   break;
+    // }
+    // case (2):
+    // {
+    //   motor_3508_0x201.PID_Omega.Set_K_D(serialport_usb.Get_Variable_Value());
+    //   break;
+    // }
+    // case (3):
+    // {
+    //   Target_Omega = serialport_usb.Get_Variable_Value();
+    //   break;
+    // }
     default:
       break;
   }
 }
 
+/**
+ * @brief HAL库UART接收imu消息DMA空闲中断
+ *
+ * @param huart UART编号
+ * @param Size 长度
+ */
+void UART_Wt_Call_Back(uint8_t *Buffer, uint16_t Length)
+{
+  wt.UART_RxCpltCallback(Buffer, Length);
+}
+
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
 
@@ -183,19 +213,22 @@ int main(void)
   MX_FDCAN3_Init();
   MX_TIM5_Init();
   MX_USART10_UART_Init();
+  MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
+  BSP_Power.Init(false, false, true);
   SYS_Timestamp.Init(&htim5);
   HAL_TIM_Base_Start_IT(&htim5);
-
-  motor_3508_0x201.Init(&hfdcan3, Motor_DJI_ID_0x201, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  motor_3508_0x201.PID_Omega.Init(0.4f, 1.0f, 0.0f, 0.0f, 2.0f, 8.0f, 0.001f);
-
+  UART_Init(&huart10, UART_Wt_Call_Back, 256);
+  wt.Init(&huart10);
+  car.Init(&wt);
   CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
 
-  serialport_usb.Init(Serialport_USB_Call_Back,
-                      4,
-                      (char **)Variable_Assignment_List);
+  serialport_usb.Init(Serialport_USB_Call_Back, 4, (char **)Variable_Assignment_List);
 
+  
+
+  
+  car.Set_Chassis_Control_Type(Chassis_Control_Type_NORMAL);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -204,20 +237,25 @@ int main(void)
   {
     Alive_Counter++;
 
-    motor_3508_0x201.Set_Target_Omega(Target_Omega);
-
-    motor_3508_0x201.TIM_Calculate_PeriodElapsedCallback();
+    Yaw = wt.Get_Angle_Yaw();
+    Pitch = wt.Get_Angle_Pitch();
+    Roll = wt.Get_Angle_Roll();
+    car.Set_Target_Velocity_X(0.5f);
+    car.TIM_2ms_Resolution_PeriodElapsedCallback();
+    car.TIM_2ms_Control_PeriodElapsedCallback();
+    
 
     // 通信设备回调数据
     TIM_1ms_CAN_PeriodElapsedCallback();
-    Now_Omega = motor_3508_0x201.Get_Now_Omega();
-    serialport_usb.Set_Data(&Now_Omega, &Target_Omega);
+
+    serialport_usb.Set_Data(&Yaw, &Pitch, &Roll);
     serialport_usb.JustFloat_Output();
 
     if (Alive_Counter >= 100)
     {
       Alive_Counter = 0;
-      motor_3508_0x201.TIM_100ms_Alive_PeriodElapsedCallback();
+      car.TIM_100ms_Alive_PeriodElapsedCallback();
+      wt.TIM_100ms_Alive_PeriodElapsedCallback();
     }
 
     HAL_Delay(0);
@@ -230,27 +268,29 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Supply configuration update enable
-  */
+   */
   HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
-  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+  while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY))
+  {
+  }
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -269,10 +309,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
-                              |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2 | RCC_CLOCKTYPE_D3PCLK1 | RCC_CLOCKTYPE_D1PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
@@ -292,9 +330,9 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -308,12 +346,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
