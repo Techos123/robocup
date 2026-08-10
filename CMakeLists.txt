@@ -57,15 +57,21 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Code/1_Middleware/1_Driver/CAN/drv_can.cpp
     Code/1_Middleware/2_Algorithm/PID/alg_pid.cpp
     Code/1_Middleware/3_System/Timestamp/sys_timestamp.cpp
-    Code/2_Device/Motor/Motor_DJI/dvc_motor_dji.cpp
+    Code/1_Middleware/1_Driver/SPI/drv_spi.cpp
+    Code/1_Middleware/2_Algorithm/Filter/EKF/alg_filter_ekf.cpp
     Code/1_Middleware/2_Algorithm/Basic/alg_basic.cpp
     Code/1_Middleware/1_Driver/USB/drv_usb.cpp
+    Code/1_Middleware/1_Driver/UART/drv_uart.cpp
+    Code/1_Middleware/2_Algorithm/Matrix/alg_matrix.cpp
+    Code/1_Middleware/2_Algorithm/Quaternion/alg_quaternion.cpp
+
+    Code/2_Device/Motor/Motor_DJI/dvc_motor_dji.cpp
     Code/2_Device/ROS/dvc_serialport_usb.cpp
     Code/2_Device/AHRS/AHRS_WHEELTEC/dvc_ahrs_wheeltec.cpp
     Code/2_Device/BSP/Buzzer/bsp_buzzer.cpp
-    Code/3_Chariot/1_Module/Chassis/Four_whell/crt_fw.cpp
-    Code/1_Middleware/1_Driver/UART/drv_uart.cpp
     Code/2_Device/BSP/Power/bsp_power.cpp
+
+    Code/3_Chariot/1_Module/Chassis/Four_whell/crt_fw.cpp
 )
 
 # Add include paths
@@ -77,6 +83,10 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Code/1_Middleware/2_Algorithm/Basic
     Code/1_Middleware/1_Driver/USB
     Code/1_Middleware/1_Driver/UART
+    Code/1_Middleware/1_Driver/SPI
+    Code/1_Middleware/2_Algorithm/Filter/EKF    
+    Code/1_Middleware/2_Algorithm/Matrix
+    Code/1_Middleware/2_Algorithm/Quaternion
 
     Code/2_Device/ROS
     Code/2_Device/AHRS/AHRS_WHEELTEC

@@ -15,10 +15,10 @@
 /* Includes ------------------------------------------------------------------*/
 
 #include "bsp_bmi088_accel_register.h"
-#include "2_Device/BSP/Power/bsp_power.h"
-#include "1_Middleware/Algorithm/PID/alg_pid.h"
-#include "1_Middleware/Driver/SPI/drv_spi.h"
-#include "1_Middleware/Algorithm/Matrix/alg_matrix.h"
+#include "bsp_power.h"
+#include "alg_pid.h"
+#include "drv_spi.h"
+#include "alg_matrix.h"
 #include "stm32h7xx_hal.h"
 
 /* Exported macros -----------------------------------------------------------*/

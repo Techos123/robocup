@@ -14,10 +14,10 @@
 
 /* Includes ------------------------------------------------------------------*/
 
-#include "Accel/bsp_bmi088_accel.h"
-#include "Gyro/bsp_bmi088_gyro.h"
-#include "1_Middleware/Algorithm/Quaternion/alg_quaternion.h"
-#include "1_Middleware/Algorithm/Filter/EKF/alg_filter_ekf.h"
+#include "bsp_bmi088_accel.h"
+#include "bsp_bmi088_gyro.h"
+#include "alg_quaternion.h"
+#include "alg_filter_ekf.h"
 
 /* Exported macros -----------------------------------------------------------*/
 
