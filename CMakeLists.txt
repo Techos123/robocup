@@ -66,7 +66,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Code/1_Middleware/2_Algorithm/Quaternion/alg_quaternion.cpp
 
     Code/2_Device/Motor/Motor_DJI/dvc_motor_dji.cpp
-    Code/2_Device/ROS/dvc_serialport_usb.cpp
+    Code/2_Device/ROS/dvc_motion_protocol.cpp
+
     Code/2_Device/BSP/Buzzer/bsp_buzzer.cpp
     Code/2_Device/BSP/Power/bsp_power.cpp
     Code/2_Device/BSP/BMI088/bsp_bmi088.cpp
