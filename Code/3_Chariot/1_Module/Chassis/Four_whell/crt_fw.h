@@ -1,7 +1,7 @@
 #ifndef CRT_FW_H
 #define CRT_FW_H
 
-#include "dvc_ahrs_wheeltec.h"
+#include "alg_basic.h"
 #include "dvc_motor_dji.h"
 
 /**
@@ -14,14 +14,18 @@ enum Enum_Chassis_Control_Type
   Chassis_Control_Type_NORMAL,
 };
 
+struct Struct_Chassis_Attitude_Feedback
+{
+  float Yaw_Deg = 0.0f;
+  float Yaw_Rate_Rad_S = 0.0f;
+  bool Valid = false;
+};
+
 class Class_Chassis_FW
 {
 public:
   // 底盘速度值PID
   Class_PID PID_Velocity_X;
-
-  // 底盘速度方向PID
-  Class_PID PID_Velocity_Y;
 
   // 底盘角速度PID
   Class_PID PID_Omega;
@@ -31,9 +35,6 @@ public:
 
   // 底盘yaw角度PID（外层角度环）
   Class_PID PID_YawAngle;
-
-  // 底盘陀螺仪
-  Class_AHRS_WHEELTEC *AHRS_Chassis;
 
   // 底盘电机
   Class_Motor_DJI_C620 Motor_Wheel[4];
@@ -52,7 +53,8 @@ public:
 
   inline void Set_Chassis_Control_Type(Enum_Chassis_Control_Type __Chassis_Control_Type);
 
-  void Init(Class_AHRS_WHEELTEC *__AHRS);
+  void Init();
+  void Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedback &__Feedback);
   void TIM_100ms_Alive_PeriodElapsedCallback();
   void TIM_2ms_Resolution_PeriodElapsedCallback();
   void TIM_2ms_Control_PeriodElapsedCallback();
@@ -87,7 +89,9 @@ protected:
   float Angle_Pitch = 0.0f;
   float Angle_Roll = 0.0f;
   float Angle_Yaw = 0.0f;
-
+  float Yaw_Rate_Rad_S = 0.0f;
+  bool Attitude_Feedback_Valid = false;
+  bool Attitude_Feedback_Initialized = false;
 
   // 轮向电机角速度目标值
   float Target_Wheel_Omega[4];
@@ -104,6 +108,8 @@ protected:
   void Dynamics_Inverse_Resolution();
 
   void Output_To_Motor();
+
+  float Get_Shortest_Yaw_Error(float target_yaw, float current_yaw);
 };
 
 /**
@@ -116,7 +122,6 @@ Class_Chassis_FW::Get_Now_Velocity_X()
 {
   return (Now_Velocity_X);
 }
-
 
 /**
  * @brief 获取当前角速度
@@ -147,8 +152,6 @@ inline float Class_Chassis_FW::Get_Target_Velocity_X()
 {
   return (Target_Velocity_X);
 }
-
-
 
 /**
  * @brief 获取目标速度方向

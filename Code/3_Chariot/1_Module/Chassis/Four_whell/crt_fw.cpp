@@ -12,40 +12,79 @@
  * @param __Chassis_Control_Type 四轮底盘控制方法
  * @param __Speed 底盘速度限制最大值
  */
-void Class_Chassis_FW::Init(Class_AHRS_WHEELTEC *__AHRS)
+void Class_Chassis_FW::Init()
 {
-  // 绑定AHRS并捕获初始航向
-  AHRS_Chassis = __AHRS;
-  Target_Angle = __AHRS->Get_Angle_Yaw();
+  Attitude_Feedback_Valid = false;
+  Attitude_Feedback_Initialized = false;
+  Angle_Yaw = 0.0f;
+  Yaw_Rate_Rad_S = 0.0f;
+  Target_Angle = 0.0f;
 
   // PID初始化
 
   // 底盘速度xPID, 输出摩擦力
-  PID_Velocity_X.Init(7.0f, 0.0f, 0.0f, 1.3f, 2.0f, 1.5f, 0.002f);
+  PID_Velocity_X.Init(7.0f, 0.0f, 0.0f, 1.3f, 2.0f, 1.5f, 0.001f);
 
   // 底盘角速度PID, 输出扭矩
-  PID_Omega.Init(4.0f, 0.0f, 0.0f, 2.3f, 2.0f, 1.5f, 0.002f);
+  PID_Omega.Init(4.0f, 0.0f, 0.0f, 2.3f, 2.0f, 1.5f, 0.001f);
 
   // 底盘yaw角速度PID, 输出扭矩
-  PID_YawSpeed.Init(4.9f, 0.0f, 0.0f, 0.0f, 0.5f, 1.5f, 0.002f);
+  PID_YawSpeed.Init(4.9f, 0.0f, 0.0f, 0.0f, 0.5f, 1.5f, 0.001f);
 
   // 底盘yaw角度PID, 输出角速度
-  PID_YawAngle.Init(7.4f, 2.4f, 0.0f, 0.2f, 1.5f, 0.5f, 0.002f, 0.01f);
+  PID_YawAngle.Init(7.4f, 2.4f, 0.0f, 0.2f, 1.5f, 0.5f, 0.002f, 0.001f);
 
   // 电机初始化
   Motor_Wheel[0].Init(&hfdcan3, Motor_DJI_ID_0x201, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[0].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
+  Motor_Wheel[0].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.001f);
   // 电机初始化
   Motor_Wheel[1].Init(&hfdcan3, Motor_DJI_ID_0x202, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[1].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
+  Motor_Wheel[1].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.001f);
 
   // 电机初始化
   Motor_Wheel[2].Init(&hfdcan3, Motor_DJI_ID_0x203, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[2].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
+  Motor_Wheel[2].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.001f);
 
   // 电机初始化
   Motor_Wheel[3].Init(&hfdcan3, Motor_DJI_ID_0x204, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
-  Motor_Wheel[3].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.002f);
+  Motor_Wheel[3].PID_Omega.Init(0.4f, 0.0f, 0.0f, 0.0f, 2.0f, 1.5f, 0.001f);
+}
+
+void Class_Chassis_FW::Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedback &__Feedback)
+{
+  if (!__Feedback.Valid ||
+      Basic_Math_Is_Invalid_Float(__Feedback.Yaw_Deg) ||
+      Basic_Math_Is_Invalid_Float(__Feedback.Yaw_Rate_Rad_S))
+  {
+    Attitude_Feedback_Valid = false;
+    return;
+  }
+
+  if (!Attitude_Feedback_Initialized)
+  {
+    Target_Angle = __Feedback.Yaw_Deg;
+    Attitude_Feedback_Initialized = true;
+  }
+
+  Angle_Yaw = __Feedback.Yaw_Deg;
+  Yaw_Rate_Rad_S = __Feedback.Yaw_Rate_Rad_S;
+  Attitude_Feedback_Valid = true;
+}
+
+float Class_Chassis_FW::Get_Shortest_Yaw_Error(float target_yaw, float current_yaw)
+{
+  float error = target_yaw - current_yaw;
+
+  while (error > 180.0f)
+  {
+    error -= 360.0f;
+  }
+  while (error < -180.0f)
+  {
+    error += 360.0f;
+  }
+
+  return error;
 }
 
 /**
@@ -95,19 +134,6 @@ void Class_Chassis_FW::Self_Resolution()
   Now_Velocity_X = (Motor_Wheel[0].Get_Now_Omega() + Motor_Wheel[1].Get_Now_Omega() - Motor_Wheel[2].Get_Now_Omega() - Motor_Wheel[3].Get_Now_Omega()) * Wheel_Radius / 4.0f;
 
   Now_Omega = -(Motor_Wheel[0].Get_Now_Omega() + Motor_Wheel[1].Get_Now_Omega() + Motor_Wheel[2].Get_Now_Omega() + Motor_Wheel[3].Get_Now_Omega()) * Wheel_Radius / Wheel_Point_Y / 4.0f;
-
-  // 角度解算
-
-  float yaw = AHRS_Chassis->Get_Angle_Yaw();
-
-  if (isnan(yaw) == true)
-  {
-    Angle_Yaw = 0.0f;
-  }
-  else
-  {
-    Angle_Yaw = yaw;
-  }
 }
 
 /**
@@ -138,6 +164,30 @@ void Class_Chassis_FW::Output_To_Dynamics()
       PID_Omega.Set_Now(Now_Omega);
       PID_Omega.TIM_Calculate_PeriodElapsedCallback();
 
+      if (Target_Angle == 0.0f)
+      {
+        if (Target_Omega == 0.0f)
+        {
+          PID_YawSpeed.Set_Target(0.0f);
+          PID_YawSpeed.Set_Now(Yaw_Rate_Rad_S);
+          PID_YawSpeed.TIM_Calculate_PeriodElapsedCallback();
+          Target_Angle = Angle_Yaw;
+        }
+        else
+        {
+          PID_YawSpeed.Set_Integral_Error(0.0f);
+          PID_YawSpeed.TIM_Calculate_PeriodElapsedCallback();
+          Target_Angle = Angle_Yaw;
+        }
+      }
+      else
+      {
+        PID_YawAngle.Set_Integral_Error(Get_Shortest_Yaw_Error(Target_Angle, Angle_Yaw) * 0.1f);
+        PID_YawAngle.TIM_Calculate_PeriodElapsedCallback();
+        PID_YawSpeed.Set_Target(PID_YawAngle.Get_Out());
+        PID_YawSpeed.Set_Now(Yaw_Rate_Rad_S);
+        PID_YawSpeed.TIM_Calculate_PeriodElapsedCallback();
+      }
       break;
     }
   }

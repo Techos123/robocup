@@ -26,7 +26,6 @@
 #include "usart.h"
 #include "usb_device.h"
 
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "alg_basic.h"
@@ -63,9 +62,11 @@
 /* USER CODE BEGIN PV */
 // Class_Serialplot serialplot;
 Class_Serialport_USB serialport_usb;
+Class_Chassis_FW car;
 float Yaw, Pitch, Roll;
 bool BMI088_Initialized = false;
 uint32_t Last_USB_Output_Tick = 0;
+uint32_t Counter = 0;
 
 /* USER CODE END PV */
 
@@ -148,6 +149,35 @@ void Serialport_USB_Call_Back(uint8_t *Buffer, uint16_t Length)
   }
 }
 
+void CAN3_Motor_Call_Back(FDCAN_RxHeaderTypeDef &Header, uint8_t *Buffer)
+{
+  switch (Header.Identifier)
+  {
+    case (0x201):
+    {
+      car.Motor_Wheel[0].CAN_RxCpltCallback();
+      break;
+    }
+    case (0x202):
+    {
+      car.Motor_Wheel[1].CAN_RxCpltCallback();
+      break;
+    }
+    case (0x203):
+    {
+      car.Motor_Wheel[2].CAN_RxCpltCallback();
+      break;
+    }
+    case (0x204):
+    {
+      car.Motor_Wheel[3].CAN_RxCpltCallback();
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -198,8 +228,10 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
+  BSP_Power.Init(false, false, true);
   SYS_Timestamp.Init(&htim5);
   HAL_TIM_Base_Start_IT(&htim5);
+
   serialport_usb.Init(Serialport_USB_Call_Back, 0, nullptr);
   SPI_Init(&hspi2, SPI2_BMI088_Call_Back);
   BMI088_Initialized = BSP_BMI088.Init();
@@ -209,6 +241,13 @@ int main(void)
     HAL_TIM_Base_Start_IT(&htim8);
   }
   Last_USB_Output_Tick = HAL_GetTick();
+
+  car.Init();
+
+  CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
+
+  car.Set_Chassis_Control_Type(Chassis_Control_Type_NORMAL);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -216,7 +255,7 @@ int main(void)
   while (1)
   {
     const uint32_t now_tick = HAL_GetTick();
-    if (BMI088_Initialized && (uint32_t)(now_tick - Last_USB_Output_Tick) >= 10U)
+    if (BMI088_Initialized && (uint32_t)(now_tick - Last_USB_Output_Tick) >= 100)
     {
       Last_USB_Output_Tick = now_tick;
       const Class_Matrix_f32<3, 1> euler_angle = BSP_BMI088.Get_Euler_Angle();
@@ -226,6 +265,34 @@ int main(void)
 
       serialport_usb.Set_Data(&Yaw, &Pitch, &Roll);
       serialport_usb.JustFloat_Output();
+    }
+
+    Struct_Chassis_Attitude_Feedback attitude_feedback;
+    if (BMI088_Initialized && BSP_BMI088.Get_Attitude_Valid())
+    {
+      const Class_Matrix_f32<3, 1> chassis_euler_angle = BSP_BMI088.Get_Euler_Angle();
+      const Class_Matrix_f32<3, 1> chassis_gyro_body = BSP_BMI088.Get_Gyro_Body();
+      attitude_feedback.Yaw_Deg = chassis_euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
+      attitude_feedback.Yaw_Rate_Rad_S = chassis_gyro_body[2][0];
+      attitude_feedback.Valid = true;
+    }
+    car.Set_Attitude_Feedback(attitude_feedback);
+
+    car.Set_Target_Velocity_X(0.5f);
+    if (Counter % 2 == 0)
+    {
+      car.TIM_2ms_Resolution_PeriodElapsedCallback();
+      car.TIM_2ms_Control_PeriodElapsedCallback();
+    }
+
+    // 通信设备回调数据
+    TIM_1ms_CAN_PeriodElapsedCallback();
+
+    Counter++;
+    if (Counter >= 100)
+    {
+      Counter = 0;
+      car.TIM_100ms_Alive_PeriodElapsedCallback();
     }
 
     HAL_Delay(0);

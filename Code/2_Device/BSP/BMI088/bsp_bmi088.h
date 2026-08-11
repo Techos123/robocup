@@ -60,6 +60,8 @@ public:
 
     inline Class_Matrix_f32<3, 1> Get_Euler_Angle() const;
 
+    inline bool Get_Attitude_Valid() const;
+
     inline Class_Matrix_f32<3, 3> Get_Rotation_Matrix() const;
 
     inline Class_Matrix_f32<4, 1> Get_Axis_Angle() const;
@@ -244,6 +246,13 @@ inline Class_Matrix_f32<3, 1> Class_BMI088::Get_Original_Gyro() const
 inline Class_Matrix_f32<3, 1> Class_BMI088::Get_Euler_Angle() const
 {
     return (Vector_Euler_Angle);
+}
+
+inline bool Class_BMI088::Get_Attitude_Valid() const
+{
+    return Hardware_Init_Finished_Flag &&
+           EKF_Init_Finished_Flag &&
+           BMI088_Gyro.Get_Valid_Flag();
 }
 
 /**
