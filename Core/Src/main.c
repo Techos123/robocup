@@ -30,6 +30,7 @@
 /* USER CODE BEGIN Includes */
 #include "alg_basic.h"
 #include "bsp_bmi088.h"
+#include "bsp_power.h"
 #include "crt_fw.h"
 #include "drv_can.h"
 #include "drv_spi.h"
