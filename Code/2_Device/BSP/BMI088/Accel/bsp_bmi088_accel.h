@@ -15,8 +15,6 @@
 /* Includes ------------------------------------------------------------------*/
 
 #include "bsp_bmi088_accel_register.h"
-#include "bsp_power.h"
-#include "alg_pid.h"
 #include "drv_spi.h"
 #include "alg_matrix.h"
 #include "stm32h7xx_hal.h"
@@ -44,10 +42,7 @@ enum Enum_BSP_BMI088_Accel_Range : uint8_t
 class Class_BMI088_Accel
 {
 public:
-    // 温控PID
-    Class_PID PID_Temperature;
-
-    void Init(const bool &__Heater_Enable = false);
+    bool Init(const bool &__Heater_Enable = false);
 
     inline float Get_Now_Temperature() const;
 
@@ -78,9 +73,6 @@ protected:
     GPIO_TypeDef *CS_GPIO_Port;
     uint16_t CS_Pin;
     GPIO_PinState Activate_Pin_State;
-    // 加热电阻绑定的定时器
-    TIM_HandleTypeDef *htim;
-    uint32_t TIM_Channel;
 
     // 常量
 
@@ -90,6 +82,8 @@ protected:
     const uint8_t BMI088_ACCEL_SPI_RX_RESERVED = 1;
     // 初始化指令数
     const uint8_t BMI088_ACCEL_INIT_INSTRUCTION_NUM = 6;
+    // 初始化阶段单个步骤的最大尝试次数
+    const uint8_t BMI088_ACCEL_INIT_RETRY_NUM = 10;
     // 加速度计量程, 默认±24g
     const Enum_BSP_BMI088_Accel_Range BMI088_ACCEL_RANGE = BMI088_ACCEL_RANGE_24G;
     // 寄存器配置相关
@@ -108,22 +102,10 @@ protected:
         {offsetof(Struct_BMI088_Accel_Register, INT_MAP_DATA_RW), 0x01 << 2},
     };
 
-    // 加热电阻标称电压
-    float HEATER_NOMINAL_VOLTAGE = 25.2f;
-    // 加热电阻预热功率, 单位与PID等同
-    float HEATER_PREHEAT_POWER = 1000.0f;
-    // 触发预热基础温度
-    float HEATER_PREHEAT_BASE_TEMPERATURE = 45.0f;
-    // 加热电阻目标温度
-    float HEATER_TARGET_TEMPERATURE = 50.0f;
-
     // 内部变量
 
     // 寄存器结构体
     Struct_BMI088_Accel_Register Register = {0};
-
-    // 加热电阻预热时间戳
-    bool Heater_Preheat_Finished_Flag = false;
 
     // 读变量
 
@@ -135,23 +117,13 @@ protected:
     // 当前加速度
     Class_Matrix_f32<3, 1> Vector_Raw_Accel;;
 
-    // 写变量
-
-    // 目标温度
-    float Target_Temperature = 0.0f;
-
-    // 读写变量
-
-    // 加热电阻使能
-    bool Heater_Enable = false;
-
     // 内部函数
 
-    void Read_Single_Register(const uint8_t &Register_Address) const;
+    uint8_t Read_Single_Register(const uint8_t &Register_Address) const;
 
-    void Read_Multi_Register(const uint8_t &Register_Address, const uint32_t &Rx_Length) const;
+    uint8_t Read_Multi_Register(const uint8_t &Register_Address, const uint32_t &Rx_Length) const;
 
-    void Write_Single_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer) const;
+    uint8_t Write_Single_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer) const;
 
     void Write_Multi_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer, const uint32_t &Tx_Length) const;
 };
@@ -199,7 +171,7 @@ inline Class_Matrix_f32<3, 1> Class_BMI088_Accel::Get_Raw_Accel() const
  */
 inline bool Class_BMI088_Accel::Get_Heater_Enable() const
 {
-    return (Heater_Enable);
+    return (false);
 }
 
 /**
@@ -209,7 +181,7 @@ inline bool Class_BMI088_Accel::Get_Heater_Enable() const
  */
 inline void Class_BMI088_Accel::Set_Target_Temperature(const float &__Target_Temperature)
 {
-    Target_Temperature = __Target_Temperature;
+    (void)__Target_Temperature;
 }
 
 /**
@@ -219,7 +191,7 @@ inline void Class_BMI088_Accel::Set_Target_Temperature(const float &__Target_Tem
  */
 inline void Class_BMI088_Accel::Set_Heater_Enable(const bool &__Heater_Enable)
 {
-    Heater_Enable = __Heater_Enable;
+    (void)__Heater_Enable;
 }
 
 #endif

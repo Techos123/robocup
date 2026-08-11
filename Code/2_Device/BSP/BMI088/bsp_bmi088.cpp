@@ -33,17 +33,25 @@ Class_BMI088 BSP_BMI088;
  * @brief 初始化BMI088
  *
  */
-void Class_BMI088::Init()
+bool Class_BMI088::Init()
 {
     SPI_Manage_Object = &SPI2_Manage_Object;
+    Hardware_Init_Finished_Flag = false;
 
-    BMI088_Accel.Init(false);
-    BMI088_Gyro.Init();
+    if (!BMI088_Accel.Init(false))
+    {
+        return false;
+    }
+    if (!BMI088_Gyro.Init())
+    {
+        return false;
+    }
 
     // 欧拉角需要辅助初始化EKF, 第一次初始化默认Yaw是0
     Vector_Euler_Angle[0][0] = 0.0f;
 
     Hardware_Init_Finished_Flag = true;
+    return true;
 }
 
 /**

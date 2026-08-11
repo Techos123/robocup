@@ -31,8 +31,10 @@ const float GRAVITY_ACCELERATION = 9.7947f;
  *
  * @param Heater_Enable 是否使能加热电阻
  */
-void Class_BMI088_Accel::Init(const bool &__Heater_Enable)
+bool Class_BMI088_Accel::Init(const bool &__Heater_Enable)
 {
+    (void)__Heater_Enable;
+
     // 绑定SPI
     SPI_Manage_Object = &SPI2_Manage_Object;
 
@@ -41,63 +43,100 @@ void Class_BMI088_Accel::Init(const bool &__Heater_Enable)
     CS_Pin = BMI088_ACCEL__SPI_CS_Pin;
     Activate_Pin_State = GPIO_PIN_RESET;
 
-    // 绑定加热电阻定时器
-    htim = &htim3;
-    TIM_Channel = TIM_CHANNEL_4;
-
-    Heater_Enable = __Heater_Enable;
-
-    // 初始化PID
-    PID_Temperature.Init(100.0f, 10.0f, 0.0f, 0.0f, 300.0f, 500.0f, 0.128f);
-
-    // 启动PWM
-    if (Heater_Enable)
-    {
-        HAL_TIM_PWM_Start(htim, TIM_Channel);
-        __HAL_TIM_SET_COMPARE(htim, TIM_Channel, 0);
-    }
-
     uint8_t res;
 
     // 检测通信是否正常
-    Register.ACC_CHIP_ID_RO = 0x00;
-    while (Register.ACC_CHIP_ID_RO != 0x1e)
+    bool chip_id_valid = false;
+    for (uint8_t retry = 0; retry < BMI088_ACCEL_INIT_RETRY_NUM; retry++)
     {
-        Read_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_CHIP_ID_RO));
+        Register.ACC_CHIP_ID_RO = 0x00;
+        if (Read_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_CHIP_ID_RO)) != HAL_OK)
+        {
+            Namespace_SYS_Timestamp::Delay_Millisecond(100);
+            continue;
+        }
         Namespace_SYS_Timestamp::Delay_Millisecond(100);
+        if (Register.ACC_CHIP_ID_RO == 0x1e)
+        {
+            chip_id_valid = true;
+            break;
+        }
+    }
+    if (!chip_id_valid)
+    {
+        return false;
     }
 
     // 软重启
     res = 0xb6;
-    Write_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_PWR_CTRL_RW), &res);
+    if (Write_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_SOFTRESET_WO), &res) != HAL_OK)
+    {
+        return false;
+    }
     Namespace_SYS_Timestamp::Delay_Millisecond(100);
 
     // 检测通信是否正常
-    Register.ACC_CHIP_ID_RO = 0x00;
-    while (Register.ACC_CHIP_ID_RO != 0x1e)
+    chip_id_valid = false;
+    for (uint8_t retry = 0; retry < BMI088_ACCEL_INIT_RETRY_NUM; retry++)
     {
-        Read_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_CHIP_ID_RO));
+        Register.ACC_CHIP_ID_RO = 0x00;
+        if (Read_Single_Register(offsetof(Struct_BMI088_Accel_Register, ACC_CHIP_ID_RO)) != HAL_OK)
+        {
+            Namespace_SYS_Timestamp::Delay_Millisecond(100);
+            continue;
+        }
         Namespace_SYS_Timestamp::Delay_Millisecond(100);
+        if (Register.ACC_CHIP_ID_RO == 0x1e)
+        {
+            chip_id_valid = true;
+            break;
+        }
+    }
+    if (!chip_id_valid)
+    {
+        return false;
     }
 
     for (uint8_t i = 0; i < BMI088_ACCEL_INIT_INSTRUCTION_NUM; i++)
     {
-        ((uint8_t *) (&Register))[BMI088_ACCEL_REGISTER_CONFIG[i][0]] = 0x00;
-        while (((uint8_t *) (&Register))[BMI088_ACCEL_REGISTER_CONFIG[i][0]] != BMI088_ACCEL_REGISTER_CONFIG[i][1])
+        bool register_configured = false;
+        for (uint8_t retry = 0; retry < BMI088_ACCEL_INIT_RETRY_NUM; retry++)
         {
             // 写入寄存器
-            Write_Single_Register(BMI088_ACCEL_REGISTER_CONFIG[i][0], &BMI088_ACCEL_REGISTER_CONFIG[i][1]);
+            if (Write_Single_Register(BMI088_ACCEL_REGISTER_CONFIG[i][0], &BMI088_ACCEL_REGISTER_CONFIG[i][1]) != HAL_OK)
+            {
+                Namespace_SYS_Timestamp::Delay_Millisecond(100);
+                continue;
+            }
             Namespace_SYS_Timestamp::Delay_Millisecond(100);
 
             // 读取寄存器
-            Read_Single_Register(BMI088_ACCEL_REGISTER_CONFIG[i][0]);
+            ((uint8_t *) (&Register))[BMI088_ACCEL_REGISTER_CONFIG[i][0]] = (uint8_t) ~BMI088_ACCEL_REGISTER_CONFIG[i][1];
+            if (Read_Single_Register(BMI088_ACCEL_REGISTER_CONFIG[i][0]) != HAL_OK)
+            {
+                Namespace_SYS_Timestamp::Delay_Millisecond(100);
+                continue;
+            }
             Namespace_SYS_Timestamp::Delay_Millisecond(100);
+            if (((uint8_t *) (&Register))[BMI088_ACCEL_REGISTER_CONFIG[i][0]] == BMI088_ACCEL_REGISTER_CONFIG[i][1])
+            {
+                register_configured = true;
+                break;
+            }
+        }
+        if (!register_configured)
+        {
+            return false;
         }
     }
 
     // 预读取一次加速度计数据
-    Read_Multi_Register(offsetof(Struct_BMI088_Accel_Register, ACC_X_RO), 6);
+    if (Read_Multi_Register(offsetof(Struct_BMI088_Accel_Register, ACC_X_RO), 6) != HAL_OK)
+    {
+        return false;
+    }
     Namespace_SYS_Timestamp::Delay_Millisecond(100);
+    return true;
 }
 
 /**
@@ -166,47 +205,6 @@ void Class_BMI088_Accel::SPI_Request_Temperature()
  */
 void Class_BMI088_Accel::TIM_128ms_Heater_PID_PeriodElapsedCallback()
 {
-    if (Heater_Enable)
-    {
-        // 防止NaN烧板
-        if (Basic_Math_Is_Invalid_Float(Now_Temperature))
-        {
-            __HAL_TIM_SET_COMPARE(htim, TIM_Channel, 0);
-            return;
-        }
-
-        // 是否开启预热
-        if (Now_Temperature < HEATER_PREHEAT_BASE_TEMPERATURE)
-        {
-            // 需要预热
-            Heater_Preheat_Finished_Flag = false;
-        }
-        else
-        {
-            // 不需要预热
-            Heater_Preheat_Finished_Flag = true;
-        }
-
-        float tmp;
-        if (!Heater_Preheat_Finished_Flag)
-        {
-            tmp = HEATER_PREHEAT_POWER;
-        }
-        else
-        {
-            PID_Temperature.Set_Now(Now_Temperature);
-            PID_Temperature.Set_Target(HEATER_TARGET_TEMPERATURE);
-            PID_Temperature.TIM_Calculate_PeriodElapsedCallback();
-            tmp = PID_Temperature.Get_Out();
-        }
-        float output = tmp / (BSP_Power.Get_Power_Voltage() * BSP_Power.Get_Power_Voltage()) * HEATER_NOMINAL_VOLTAGE * HEATER_NOMINAL_VOLTAGE;
-        Basic_Math_Constrain(&output, 0.0f, 10000.0f);
-        __HAL_TIM_SET_COMPARE(htim, TIM_Channel, (uint32_t)(output));
-    }
-    else
-    {
-        __HAL_TIM_SET_COMPARE(htim, TIM_Channel, 0);
-    }
 }
 
 /**
@@ -214,11 +212,11 @@ void Class_BMI088_Accel::TIM_128ms_Heater_PID_PeriodElapsedCallback()
  *
  * @param Register_Address 寄存器地址
  */
-void Class_BMI088_Accel::Read_Single_Register(const uint8_t &Register_Address) const
+uint8_t Class_BMI088_Accel::Read_Single_Register(const uint8_t &Register_Address) const
 {
     SPI_Manage_Object->Tx_Buffer[0] = Register_Address | BMI088_ACCEL_READ_MASK;
 
-    SPI_Transmit_Receive_Data(SPI_Manage_Object->SPI_Handler, CS_GPIO_Port, CS_Pin, Activate_Pin_State, 1 + BMI088_ACCEL_SPI_RX_RESERVED, 1);
+    return SPI_Transmit_Receive_Data(SPI_Manage_Object->SPI_Handler, CS_GPIO_Port, CS_Pin, Activate_Pin_State, 1 + BMI088_ACCEL_SPI_RX_RESERVED, 1);
 }
 
 /** * @brief 读取多个寄存器, 数据不会立即返回, 而是在SPI接收回调函数中处理
@@ -226,11 +224,11 @@ void Class_BMI088_Accel::Read_Single_Register(const uint8_t &Register_Address) c
  * @param Register_Address 寄存器地址
  * @param Rx_Length 接收数据长度
  */
-void Class_BMI088_Accel::Read_Multi_Register(const uint8_t &Register_Address, const uint32_t &Rx_Length) const
+uint8_t Class_BMI088_Accel::Read_Multi_Register(const uint8_t &Register_Address, const uint32_t &Rx_Length) const
 {
     SPI_Manage_Object->Tx_Buffer[0] = Register_Address | BMI088_ACCEL_READ_MASK;
 
-    SPI_Transmit_Receive_Data(SPI_Manage_Object->SPI_Handler, CS_GPIO_Port, CS_Pin, Activate_Pin_State, 1 + BMI088_ACCEL_SPI_RX_RESERVED, Rx_Length);
+    return SPI_Transmit_Receive_Data(SPI_Manage_Object->SPI_Handler, CS_GPIO_Port, CS_Pin, Activate_Pin_State, 1 + BMI088_ACCEL_SPI_RX_RESERVED, Rx_Length);
 }
 
 /**
@@ -239,12 +237,12 @@ void Class_BMI088_Accel::Read_Multi_Register(const uint8_t &Register_Address, co
  * @param Register_Address 寄存器地址
  * @param Tx_Data_Buffer 发送数据缓冲区
  */
-void Class_BMI088_Accel::Write_Single_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer) const
+uint8_t Class_BMI088_Accel::Write_Single_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer) const
 {
     SPI_Manage_Object->Tx_Buffer[0] = Register_Address;
     SPI_Manage_Object->Tx_Buffer[1] = Tx_Data_Buffer[0];
 
-    SPI_Transmit_Data(SPI_Manage_Object->SPI_Handler, CS_GPIO_Port, CS_Pin, Activate_Pin_State, 2);
+    return SPI_Transmit_Data(SPI_Manage_Object->SPI_Handler, CS_GPIO_Port, CS_Pin, Activate_Pin_State, 2);
 }
 
 /**

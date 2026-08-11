@@ -28,13 +28,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "alg_pid.h"
-#include "bsp_power.h"
-#include "crt_fw.h"
-#include "drv_can.h"
+#include "alg_basic.h"
+#include "bsp_bmi088.h"
+#include "drv_spi.h"
 #include "drv_usb.h"
-#include "dvc_ahrs_wheeltec.h"
-#include "dvc_motor_dji.h"
 #include "dvc_serialport_usb.h"
 #include "sys_timestamp.h"
 
@@ -62,21 +59,9 @@
 /* USER CODE BEGIN PV */
 // Class_Serialplot serialplot;
 Class_Serialport_USB serialport_usb;
-Class_AHRS_WHEELTEC wt;
-Class_Chassis_FW car;
-float Now_Omega, Target_Omega = 2.0f;
 float Yaw, Pitch, Roll;
-uint32_t Alive_Counter = 0;
-int32_t Output;
-
-static char Variable_Assignment_List[][SERIALPORT_USB_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH] = {
-    // 电机调PID
-    "p",
-    "i",
-    "d",
-    "v",
-
-};
+bool BMI088_Initialized = false;
+uint32_t Last_USB_Output_Tick = 0;
 
 /* USER CODE END PV */
 
@@ -89,32 +74,21 @@ void PeriphCommonClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void CAN3_Motor_Call_Back(FDCAN_RxHeaderTypeDef &Header, uint8_t *Buffer)
+void SPI2_BMI088_Call_Back(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t Tx_Length, uint16_t Rx_Length)
 {
-  switch (Header.Identifier)
+  (void)Tx_Buffer;
+  (void)Rx_Buffer;
+  (void)Tx_Length;
+  (void)Rx_Length;
+  BSP_BMI088.SPI_RxCpltCallback();
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (BMI088_Initialized &&
+      (GPIO_Pin == BMI088_ACCEL__INTERRUPT_Pin || GPIO_Pin == BMI088_GYRO__INTERRUPT_Pin))
   {
-    case (0x201):
-    {
-      car.Motor_Wheel[0].CAN_RxCpltCallback();
-      break;
-    }
-    case (0x202):
-    {
-      car.Motor_Wheel[1].CAN_RxCpltCallback();
-      break;
-    }
-    case (0x203):
-    {
-      car.Motor_Wheel[2].CAN_RxCpltCallback();
-      break;
-    }
-    case (0x204):
-    {
-      car.Motor_Wheel[3].CAN_RxCpltCallback();
-      break;
-    }
-    default:
-      break;
+    BSP_BMI088.EXTI_Flag_Callback(GPIO_Pin);
   }
 }
 
@@ -123,6 +97,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM5)
   {
     SYS_Timestamp.TIM_3600s_PeriodElapsedCallback();
+  }
+  else if (htim->Instance == TIM4)
+  {
+    BSP_BMI088.TIM_10us_Calculate_PeriodElapsedCallback();
+  }
+  else if (htim->Instance == TIM8)
+  {
+    BSP_BMI088.TIM_125us_Calculate_PeriodElapsedCallback();
   }
 }
 
@@ -160,17 +142,6 @@ void Serialport_USB_Call_Back(uint8_t *Buffer, uint16_t Length)
     default:
       break;
   }
-}
-
-/**
- * @brief HAL库UART接收imu消息DMA空闲中断
- *
- * @param huart UART编号
- * @param Size 长度
- */
-void UART_Wt_Call_Back(uint8_t *Buffer, uint16_t Length)
-{
-  wt.UART_RxCpltCallback(Buffer, Length);
 }
 
 /* USER CODE END 0 */
@@ -220,48 +191,37 @@ int main(void)
   MX_USART10_UART_Init();
   MX_TIM12_Init();
   MX_SPI2_Init();
+  MX_TIM4_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
-  BSP_Power.Init(false, false, true);
   SYS_Timestamp.Init(&htim5);
   HAL_TIM_Base_Start_IT(&htim5);
-  UART_Init(&huart10, UART_Wt_Call_Back, 256);
-  wt.Init(&huart10);
-  car.Init(&wt);
-  CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
-
-  serialport_usb.Init(Serialport_USB_Call_Back, 4, (char **)Variable_Assignment_List);
-
-  
-
-  
-  car.Set_Chassis_Control_Type(Chassis_Control_Type_NORMAL);
+  serialport_usb.Init(Serialport_USB_Call_Back, 0, nullptr);
+  SPI_Init(&hspi2, SPI2_BMI088_Call_Back);
+  BMI088_Initialized = BSP_BMI088.Init();
+  if (BMI088_Initialized)
+  {
+    HAL_TIM_Base_Start_IT(&htim4);
+    HAL_TIM_Base_Start_IT(&htim8);
+  }
+  Last_USB_Output_Tick = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    Alive_Counter++;
-
-    Yaw = wt.Get_Angle_Yaw();
-    Pitch = wt.Get_Angle_Pitch();
-    Roll = wt.Get_Angle_Roll();
-    car.Set_Target_Velocity_X(0.5f);
-    car.TIM_2ms_Resolution_PeriodElapsedCallback();
-    car.TIM_2ms_Control_PeriodElapsedCallback();
-    
-
-    // 通信设备回调数据
-    TIM_1ms_CAN_PeriodElapsedCallback();
-
-    serialport_usb.Set_Data(&Yaw, &Pitch, &Roll);
-    serialport_usb.JustFloat_Output();
-
-    if (Alive_Counter >= 100)
+    const uint32_t now_tick = HAL_GetTick();
+    if (BMI088_Initialized && (uint32_t)(now_tick - Last_USB_Output_Tick) >= 10U)
     {
-      Alive_Counter = 0;
-      car.TIM_100ms_Alive_PeriodElapsedCallback();
-      wt.TIM_100ms_Alive_PeriodElapsedCallback();
+      Last_USB_Output_Tick = now_tick;
+      const Class_Matrix_f32<3, 1> euler_angle = BSP_BMI088.Get_Euler_Angle();
+      Yaw = euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
+      Pitch = euler_angle[1][0] / BASIC_MATH_DEG_TO_RAD;
+      Roll = euler_angle[2][0] / BASIC_MATH_DEG_TO_RAD;
+
+      serialport_usb.Set_Data(&Yaw, &Pitch, &Roll);
+      serialport_usb.JustFloat_Output();
     }
 
     HAL_Delay(0);
@@ -272,7 +232,7 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
-
+ 
 /**
   * @brief System Clock Configuration
   * @retval None
