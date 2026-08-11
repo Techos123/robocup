@@ -214,6 +214,16 @@ SECTIONS
   PROVIDE( __arm32_tls_tcb_offset = MAX(8, __tls_align) );
   PROVIDE( __arm64_tls_tcb_offset = MAX(16, __tls_align) );
 
+  /* DMA1/2 cannot access DTCM. DMA buffers must live in a bus-accessible RAM. */
+  .dma_buffer (NOLOAD) : ALIGN(32)
+  {
+    __dma_buffer_start__ = .;
+    KEEP(*(.dma_buffer))
+    KEEP(*(.dma_buffer*))
+    . = ALIGN(32);
+    __dma_buffer_end__ = .;
+  } >RAM_D2
+
   .bss (NOLOAD) : ALIGN(4)
   {
     *(.bss)

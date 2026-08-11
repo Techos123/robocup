@@ -31,7 +31,7 @@ class Class_Power
 public:
     void Init(bool dc24_0_status = false, bool dc24_1_status = false, bool dc5_status = false);
 
-    inline float Get_Power_Voltage() const;
+    // inline float Get_Power_Voltage() const;
 
     inline void Set_DC24_0(bool status);
 

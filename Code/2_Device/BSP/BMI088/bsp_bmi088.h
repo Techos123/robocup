@@ -52,7 +52,7 @@ public:
 
     Class_Filter_EKF<4, 3, 3> EKF_Quaternion;
 
-    void Init();
+    bool Init();
 
     inline Class_Matrix_f32<3, 1> Get_Original_Accel() const;
 

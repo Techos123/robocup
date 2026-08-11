@@ -15,8 +15,8 @@
 /* Includes ------------------------------------------------------------------*/
 
 #include "bsp_bmi088_gyro_register.h"
-#include "1_Middleware/Driver/SPI/drv_spi.h"
-#include "1_Middleware/Algorithm/Matrix/alg_matrix.h"
+#include "drv_spi.h"
+#include "alg_matrix.h"
 #include "stm32h7xx_hal.h"
 
 /* Exported macros -----------------------------------------------------------*/
@@ -43,7 +43,7 @@ enum Enum_BSP_BMI088_Gyro_Range : uint8_t
 class Class_BMI088_Gyro
 {
 public:
-    void Init();
+    bool Init();
 
     inline bool Get_Valid_Flag() const;
 
@@ -71,6 +71,8 @@ protected:
     const uint8_t BMI088_GYRO_READ_MASK = 0x80;
     // 初始化指令数
     const uint8_t BMI088_GYRO_INIT_INSTRUCTION_NUM = 5;
+    // 初始化阶段单个步骤的最大尝试次数
+    const uint8_t BMI088_GYRO_INIT_RETRY_NUM = 10;
     // 陀螺仪量程, 默认2000°/s
     const Enum_BSP_BMI088_Gyro_Range BMI088_GYRO_RANGE = BMI088_GYRO_RANGE_2000DPS;
     // 寄存器配置相关
@@ -105,11 +107,11 @@ protected:
 
     // 内部函数
 
-    void Read_Single_Register(const uint8_t &Register_Address) const;
+    uint8_t Read_Single_Register(const uint8_t &Register_Address) const;
 
-    void Read_Multi_Register(const uint8_t &Register_Address, const uint32_t &Rx_Length) const;
+    uint8_t Read_Multi_Register(const uint8_t &Register_Address, const uint32_t &Rx_Length) const;
 
-    void Write_Single_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer) const;
+    uint8_t Write_Single_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer) const;
 
     void Write_Multi_Register(const uint8_t &Register_Address, const uint8_t *Tx_Data_Buffer, const uint32_t &Tx_Length) const;
 };
