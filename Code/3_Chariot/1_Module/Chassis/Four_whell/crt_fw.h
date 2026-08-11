@@ -14,6 +14,16 @@ enum Enum_Chassis_Control_Type
   Chassis_Control_Type_NORMAL,
 };
 
+/**
+ * @brief 底盘航向控制类型
+ *
+ */
+enum Enum_Chassis_Yaw_Control_Type
+{
+  Chassis_Yaw_Control_Type_OMEGA = 0,
+  Chassis_Yaw_Control_Type_ANGLE,
+};
+
 struct Struct_Chassis_Attitude_Feedback
 {
   float Yaw_Deg = 0.0f;
@@ -40,6 +50,7 @@ public:
   Class_Motor_DJI_C620 Motor_Wheel[4];
 
   inline Enum_Chassis_Control_Type Get_Chassis_Control_Type();
+  inline Enum_Chassis_Yaw_Control_Type Get_Chassis_Yaw_Control_Type();
 
   inline float Get_Now_Velocity_X();
   inline float Get_Now_Omega();
@@ -52,6 +63,7 @@ public:
   inline void Set_Target_Angle(float __Target_Angle);
 
   inline void Set_Chassis_Control_Type(Enum_Chassis_Control_Type __Chassis_Control_Type);
+  void Set_Chassis_Yaw_Control_Type(Enum_Chassis_Yaw_Control_Type __Chassis_Yaw_Control_Type);
 
   void Init();
   void Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedback &__Feedback);
@@ -91,15 +103,18 @@ protected:
   float Angle_Yaw = 0.0f;
   float Yaw_Rate_Rad_S = 0.0f;
   bool Attitude_Feedback_Valid = false;
-  bool Attitude_Feedback_Initialized = false;
+  bool Target_Angle_Initialized = false;
 
-  // 轮向电机角速度目标值
-  float Target_Wheel_Omega[4];
-  // 轮向电机电流目标值
-  float Target_Wheel_Current[4];
+  // 当前航向控制器输出的z轴力矩
+  float Output_Moment_Z = 0.0f;
+
+  // 轮向电机扭矩目标值
+  float Target_Wheel_Torque[4];
 
   // 底盘控制方法
   Enum_Chassis_Control_Type Chassis_Control_Type = Chassis_Control_Type_DISABLE;
+  // 底盘航向控制方法
+  Enum_Chassis_Yaw_Control_Type Chassis_Yaw_Control_Type = Chassis_Yaw_Control_Type_OMEGA;
 
   void Self_Resolution();
 
@@ -108,8 +123,6 @@ protected:
   void Dynamics_Inverse_Resolution();
 
   void Output_To_Motor();
-
-  float Get_Shortest_Yaw_Error(float target_yaw, float current_yaw);
 };
 
 /**
@@ -141,6 +154,16 @@ inline float Class_Chassis_FW::Get_Now_Omega()
 inline Enum_Chassis_Control_Type Class_Chassis_FW::Get_Chassis_Control_Type()
 {
   return (Chassis_Control_Type);
+}
+
+/**
+ * @brief 获取底盘航向控制方法
+ *
+ * @return Enum_Chassis_Yaw_Control_Type 底盘航向控制方法
+ */
+inline Enum_Chassis_Yaw_Control_Type Class_Chassis_FW::Get_Chassis_Yaw_Control_Type()
+{
+  return (Chassis_Yaw_Control_Type);
 }
 
 /**
@@ -196,6 +219,7 @@ inline void Class_Chassis_FW::Set_Target_Omega(float __Target_Omega)
 inline void Class_Chassis_FW::Set_Target_Angle(float __Target_Angle)
 {
   Target_Angle = __Target_Angle;
+  Target_Angle_Initialized = true;
 }
 
 #endif

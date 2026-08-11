@@ -39,6 +39,8 @@ class Class_PID
 public:
   void Init(const float &__K_P, const float &__K_I, const float &__K_D, const float &__K_F = 0.0f, const float &__I_Out_Max = 0.0f, const float &__Out_Max = 0.0f, const float &__D_T = 0.001f, const float &__Dead_Zone = 0.0f, const float &__I_Variable_Speed_A = 0.0f, const float &__I_Variable_Speed_B = 0.0f, const float &__I_Separate_Threshold = 0.0f, const Enum_PID_D_First &__D_First = PID_D_First_DISABLE);
 
+  void Reset(const float &__Target = 0.0f, const float &__Now = 0.0f);
+
   inline float Get_Integral_Error() const;
 
   inline float Get_Out() const;

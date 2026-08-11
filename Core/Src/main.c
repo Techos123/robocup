@@ -243,6 +243,7 @@ int main(void)
   Last_USB_Output_Tick = HAL_GetTick();
 
   car.Init();
+  car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_ANGLE);
 
   CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
 
