@@ -22,20 +22,55 @@
 
 /* Private macros ------------------------------------------------------------*/
 
+#define UART_DMA_BUFFER_ATTRIBUTE __attribute__((section(".dma_buffer"), aligned(32)))
+
 /* Private types -------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
 
-Struct_UART_Manage_Object UART1_Manage_Object = {0};
-Struct_UART_Manage_Object UART2_Manage_Object = {0};
-Struct_UART_Manage_Object UART3_Manage_Object = {0};
-Struct_UART_Manage_Object UART4_Manage_Object = {0};
-Struct_UART_Manage_Object UART5_Manage_Object = {0};
-Struct_UART_Manage_Object UART6_Manage_Object = {0};
-Struct_UART_Manage_Object UART7_Manage_Object = {0};
-Struct_UART_Manage_Object UART10_Manage_Object = {0};
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART1_Manage_Object;
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART2_Manage_Object;
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART3_Manage_Object;
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART4_Manage_Object;
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART5_Manage_Object;
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART6_Manage_Object;
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART7_Manage_Object;
+UART_DMA_BUFFER_ATTRIBUTE Struct_UART_Manage_Object UART10_Manage_Object;
 
 /* Private function declarations ---------------------------------------------*/
+
+static void UART_Clear_Buffers(Struct_UART_Manage_Object *uart_object)
+{
+    memset(uart_object->Tx_Buffer, 0, sizeof(uart_object->Tx_Buffer));
+    memset(uart_object->Rx_Buffer, 0, sizeof(uart_object->Rx_Buffer));
+}
+
+static void UART_Clear_Rx_Buffer(Struct_UART_Manage_Object *uart_object)
+{
+    memset(uart_object->Rx_Buffer, 0, sizeof(uart_object->Rx_Buffer));
+}
+
+static HAL_StatusTypeDef UART_Start_Receive_To_Idle(
+    UART_HandleTypeDef *huart,
+    Struct_UART_Manage_Object *uart_object)
+{
+    if (huart == nullptr || uart_object == nullptr || huart->hdmarx == nullptr)
+    {
+        return HAL_ERROR;
+    }
+
+    HAL_StatusTypeDef status = HAL_UARTEx_ReceiveToIdle_DMA(
+        huart,
+        uart_object->Rx_Buffer,
+        uart_object->Rx_Buffer_Length);
+    if (status == HAL_OK)
+    {
+        // ReceiveToIdle enables HT internally; this driver only handles idle
+        // and transfer-complete events.
+        __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
+    }
+    return status;
+}
 
 /* function prototypes -------------------------------------------------------*/
 
@@ -52,62 +87,68 @@ void UART_Init(UART_HandleTypeDef *huart,
 {
     if (huart->Instance == USART1)
     {
+        UART_Clear_Buffers(&UART1_Manage_Object);
         UART1_Manage_Object.UART_Handler = huart;
         UART1_Manage_Object.Callback_Function = Callback_Function;
         UART1_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART1_Manage_Object.Rx_Buffer, UART1_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART1_Manage_Object);
     }
     else if (huart->Instance == USART2)
     {
+        UART_Clear_Buffers(&UART2_Manage_Object);
         UART2_Manage_Object.UART_Handler = huart;
         UART2_Manage_Object.Callback_Function = Callback_Function;
         UART2_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART2_Manage_Object.Rx_Buffer, UART2_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART2_Manage_Object);
     }
     else if (huart->Instance == USART3)
     {
+        UART_Clear_Buffers(&UART3_Manage_Object);
         UART3_Manage_Object.UART_Handler = huart;
         UART3_Manage_Object.Callback_Function = Callback_Function;
         UART3_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART3_Manage_Object.Rx_Buffer, UART3_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART3_Manage_Object);
     }
     else if (huart->Instance == UART4)
     {
+        UART_Clear_Buffers(&UART4_Manage_Object);
         UART4_Manage_Object.UART_Handler = huart;
         UART4_Manage_Object.Callback_Function = Callback_Function;
         UART4_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART4_Manage_Object.Rx_Buffer, UART4_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART4_Manage_Object);
     }
     else if (huart->Instance == UART5)
     {
+        UART_Clear_Buffers(&UART5_Manage_Object);
         UART5_Manage_Object.UART_Handler = huart;
         UART5_Manage_Object.Callback_Function = Callback_Function;
         UART5_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART5_Manage_Object.Rx_Buffer, UART5_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART5_Manage_Object);
     }
     else if (huart->Instance == USART6)
     {
+        UART_Clear_Buffers(&UART6_Manage_Object);
         UART6_Manage_Object.UART_Handler = huart;
         UART6_Manage_Object.Callback_Function = Callback_Function;
         UART6_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART6_Manage_Object.Rx_Buffer, UART6_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART6_Manage_Object);
     }
     else if (huart->Instance == UART7)
     {
+      UART_Clear_Buffers(&UART7_Manage_Object);
       UART7_Manage_Object.UART_Handler = huart;
       UART7_Manage_Object.Callback_Function = Callback_Function;
       UART7_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-      HAL_UARTEx_ReceiveToIdle_DMA(huart, UART7_Manage_Object.Rx_Buffer, UART7_Manage_Object.Rx_Buffer_Length);
+      UART_Start_Receive_To_Idle(huart, &UART7_Manage_Object);
     }
     else if (huart->Instance == USART10)
     {
+      UART_Clear_Buffers(&UART10_Manage_Object);
       UART10_Manage_Object.UART_Handler = huart;
       UART10_Manage_Object.Callback_Function = Callback_Function;
       UART10_Manage_Object.Rx_Buffer_Length = Rx_Buffer_Length;
-      HAL_UARTEx_ReceiveToIdle_DMA(huart, UART10_Manage_Object.Rx_Buffer, UART10_Manage_Object.Rx_Buffer_Length);
+      UART_Start_Receive_To_Idle(huart, &UART10_Manage_Object);
     }
-    // HAL_UARTEx_ReceiveToIdle_DMA 内部会重新使能HT，必须在其后关闭
-    __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
 }
 
 /**
@@ -119,38 +160,44 @@ void UART_Reinit(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART1_Manage_Object.Rx_Buffer, UART1_Manage_Object.Rx_Buffer_Length);
+        UART_Clear_Rx_Buffer(&UART1_Manage_Object);
+        UART_Start_Receive_To_Idle(huart, &UART1_Manage_Object);
     }
     else if (huart->Instance == USART2)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART2_Manage_Object.Rx_Buffer, UART2_Manage_Object.Rx_Buffer_Length);
+        UART_Clear_Rx_Buffer(&UART2_Manage_Object);
+        UART_Start_Receive_To_Idle(huart, &UART2_Manage_Object);
     }
     else if (huart->Instance == USART3)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART3_Manage_Object.Rx_Buffer, UART3_Manage_Object.Rx_Buffer_Length);
+        UART_Clear_Rx_Buffer(&UART3_Manage_Object);
+        UART_Start_Receive_To_Idle(huart, &UART3_Manage_Object);
     }
     else if (huart->Instance == UART4)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART4_Manage_Object.Rx_Buffer, UART4_Manage_Object.Rx_Buffer_Length);
+        UART_Clear_Rx_Buffer(&UART4_Manage_Object);
+        UART_Start_Receive_To_Idle(huart, &UART4_Manage_Object);
     }
     else if (huart->Instance == UART5)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART5_Manage_Object.Rx_Buffer, UART5_Manage_Object.Rx_Buffer_Length);
+        UART_Clear_Rx_Buffer(&UART5_Manage_Object);
+        UART_Start_Receive_To_Idle(huart, &UART5_Manage_Object);
     }
     else if (huart->Instance == USART6)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART6_Manage_Object.Rx_Buffer, UART6_Manage_Object.Rx_Buffer_Length);
+        UART_Clear_Rx_Buffer(&UART6_Manage_Object);
+        UART_Start_Receive_To_Idle(huart, &UART6_Manage_Object);
     }
     else if (huart->Instance == UART7)
     {
-      HAL_UARTEx_ReceiveToIdle_DMA(huart, UART7_Manage_Object.Rx_Buffer, UART7_Manage_Object.Rx_Buffer_Length);
+      UART_Clear_Rx_Buffer(&UART7_Manage_Object);
+      UART_Start_Receive_To_Idle(huart, &UART7_Manage_Object);
     }
     else if (huart->Instance == USART10)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART10_Manage_Object.Rx_Buffer, UART10_Manage_Object.Rx_Buffer_Length);
+        UART_Clear_Rx_Buffer(&UART10_Manage_Object);
+        UART_Start_Receive_To_Idle(huart, &UART10_Manage_Object);
     }
-    // HAL_UARTEx_ReceiveToIdle_DMA 内部会重新使能HT，必须在其后关闭
-    __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
 }
 
 /**
@@ -238,7 +285,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART1_Manage_Object.Callback_Function(UART1_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART1_Manage_Object.Rx_Buffer, UART1_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART1_Manage_Object);
     }
     else if (huart->Instance == USART2)
     {
@@ -246,7 +293,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART2_Manage_Object.Callback_Function(UART2_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART2_Manage_Object.Rx_Buffer, UART2_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART2_Manage_Object);
     }
     else if (huart->Instance == USART3)
     {
@@ -254,7 +301,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART3_Manage_Object.Callback_Function(UART3_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART3_Manage_Object.Rx_Buffer, UART3_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART3_Manage_Object);
     }
     else if (huart->Instance == UART4)
     {
@@ -262,7 +309,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART4_Manage_Object.Callback_Function(UART4_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART4_Manage_Object.Rx_Buffer, UART4_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART4_Manage_Object);
     }
     else if (huart->Instance == UART5)
     {
@@ -270,7 +317,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART5_Manage_Object.Callback_Function(UART5_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART5_Manage_Object.Rx_Buffer, UART5_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART5_Manage_Object);
     }
     else if (huart->Instance == USART6)
     {
@@ -278,7 +325,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART6_Manage_Object.Callback_Function(UART6_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART6_Manage_Object.Rx_Buffer, UART6_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART6_Manage_Object);
     }
     else if (huart->Instance == UART7)
     {
@@ -286,7 +333,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART7_Manage_Object.Callback_Function(UART7_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART7_Manage_Object.Rx_Buffer, UART7_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART7_Manage_Object);
     }
     else if (huart->Instance == USART10)
     {
@@ -294,10 +341,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
         {
             UART10_Manage_Object.Callback_Function(UART10_Manage_Object.Rx_Buffer, Size);
         }
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART10_Manage_Object.Rx_Buffer, UART10_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART10_Manage_Object);
     }
-    // 关闭DMA传输过半中断, 避免干扰正常的接收流程
-    __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
 }
 
 /**
@@ -309,35 +354,35 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART1)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART1_Manage_Object.Rx_Buffer, UART1_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART1_Manage_Object);
     }
     else if (huart->Instance == USART2)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART2_Manage_Object.Rx_Buffer, UART2_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART2_Manage_Object);
     }
     else if (huart->Instance == USART3)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART3_Manage_Object.Rx_Buffer, UART3_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART3_Manage_Object);
     }
     else if (huart->Instance == UART4)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART4_Manage_Object.Rx_Buffer, UART4_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART4_Manage_Object);
     }
     else if (huart->Instance == UART5)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART5_Manage_Object.Rx_Buffer, UART5_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART5_Manage_Object);
     }
     else if (huart->Instance == USART6)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART6_Manage_Object.Rx_Buffer, UART6_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART6_Manage_Object);
     }
     else if (huart->Instance == UART7)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART7_Manage_Object.Rx_Buffer, UART7_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART7_Manage_Object);
     }
     else if (huart->Instance == USART10)
     {
-        HAL_UARTEx_ReceiveToIdle_DMA(huart, UART10_Manage_Object.Rx_Buffer, UART10_Manage_Object.Rx_Buffer_Length);
+        UART_Start_Receive_To_Idle(huart, &UART10_Manage_Object);
     }
 }
 

@@ -23,19 +23,16 @@ void Class_Chassis_FW::Init()
   Chassis_Yaw_Control_Type = Chassis_Yaw_Control_Type_OMEGA;
 
   // 底盘速度xPID, 输出摩擦力
-  PID_Velocity_X.Init(7.0f, 0.0f, 0.0f, 1.3f, 2.0f, 5.0f, 0.002f);
-
-  // 底盘角速度PID, 输出扭矩
-  PID_Omega.Init(4.0f, 0.0f, 0.0f, 2.3f, 2.0f, 5.0f, 0.002f);
+  PID_Velocity_X.Init(1.0f, 0.0f, 0.0f, 1.3f, 2.0f, 20.0f, 0.002f);
 
   // 底盘yaw角速度PID, 输出扭矩
-  PID_YawSpeed.Init(4.9f, 0.0f, 0.0f, 0.0f, 0.5f, 5.0f, 0.002f);
+  PID_YawSpeed.Init(1.0f, 0.0f, 0.0f, 0.0f, 0.5f, 5.0f, 0.002f);
 
   // 底盘yaw角度PID, 输出角速度
-  PID_YawAngle.Init(7.4f, 2.4f, 0.0f, 0.2f, 1.5f, 5.0f, 0.002f, 0.01f);
+  PID_YawAngle.Init(0.1f, 0.0f, 0.0f, 0.2f, 1.5f, 5.0f, 0.002f, 0.01f);
 
   PID_Velocity_X.Reset();
-  PID_Omega.Reset();
+
   PID_YawSpeed.Reset();
   PID_YawAngle.Reset();
 
@@ -80,7 +77,7 @@ void Class_Chassis_FW::Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedb
   {
     Target_Angle = Angle_Yaw;
     Target_Angle_Initialized = true;
-    PID_YawAngle.Reset(Target_Angle, Angle_Yaw);
+    PID_YawAngle.Reset();
     PID_YawSpeed.Reset(0.0f, Yaw_Rate_Rad_S);
   }
 }
@@ -95,9 +92,8 @@ void Class_Chassis_FW::Set_Chassis_Yaw_Control_Type(Enum_Chassis_Yaw_Control_Typ
   Chassis_Yaw_Control_Type = __Chassis_Yaw_Control_Type;
   Output_Moment_Z = 0.0f;
 
-  PID_Omega.Reset(Target_Omega, Now_Omega);
   PID_YawSpeed.Reset(0.0f, Yaw_Rate_Rad_S);
-  PID_YawAngle.Reset(Target_Angle, Angle_Yaw);
+  PID_YawAngle.Reset();
 
   if (Chassis_Yaw_Control_Type == Chassis_Yaw_Control_Type_ANGLE)
   {
@@ -105,7 +101,7 @@ void Class_Chassis_FW::Set_Chassis_Yaw_Control_Type(Enum_Chassis_Yaw_Control_Typ
     {
       Target_Angle = Angle_Yaw;
       Target_Angle_Initialized = true;
-      PID_YawAngle.Reset(Target_Angle, Angle_Yaw);
+      PID_YawAngle.Reset();
     }
     else
     {
@@ -116,6 +112,22 @@ void Class_Chassis_FW::Set_Chassis_Yaw_Control_Type(Enum_Chassis_Yaw_Control_Typ
   {
     Target_Angle_Initialized = false;
   }
+}
+
+float Class_Chassis_FW::Get_Shortest_Yaw_Error(float target_yaw, float current_yaw)
+{
+  float error = target_yaw - current_yaw;
+
+  while (error > 180.0f)
+  {
+    error -= 360.0f;
+  }
+  while (error < -180.0f)
+  {
+    error += 360.0f;
+  }
+
+  return error;
 }
 
 /**
@@ -179,7 +191,7 @@ void Class_Chassis_FW::Output_To_Dynamics()
     {
 
       PID_Velocity_X.Set_Integral_Error(0.0f);
-      PID_Omega.Set_Integral_Error(0.0f);
+
       PID_YawSpeed.Set_Integral_Error(0.0f);
       PID_YawAngle.Set_Integral_Error(0.0f);
       Output_Moment_Z = 0.0f;
@@ -196,10 +208,11 @@ void Class_Chassis_FW::Output_To_Dynamics()
       {
         case (Chassis_Yaw_Control_Type_OMEGA):
         {
-          PID_Omega.Set_Target(Target_Omega);
-          PID_Omega.Set_Now(Now_Omega);
-          PID_Omega.TIM_Calculate_PeriodElapsedCallback();
-          Output_Moment_Z = PID_Omega.Get_Out();
+
+          PID_YawSpeed.Set_Target(Target_Omega);
+          PID_YawSpeed.Set_Now(0.4f * Now_Omega + 0.6f * Yaw_Rate_Rad_S);
+          PID_YawSpeed.TIM_Calculate_PeriodElapsedCallback();
+          Output_Moment_Z = PID_YawSpeed.Get_Out();
           break;
         }
         case (Chassis_Yaw_Control_Type_ANGLE):
@@ -211,13 +224,13 @@ void Class_Chassis_FW::Output_To_Dynamics()
             Output_Moment_Z = 0.0f;
             break;
           }
-
-          PID_YawAngle.Set_Target(Target_Angle);
-          PID_YawAngle.Set_Now(Angle_Yaw);
+          float yaw_error = Get_Shortest_Yaw_Error(Target_Angle, Angle_Yaw);
+          PID_YawAngle.Set_Target(yaw_error);
+          PID_YawAngle.Set_Now(0.0f);
           PID_YawAngle.TIM_Calculate_PeriodElapsedCallback();
 
           PID_YawSpeed.Set_Target(PID_YawAngle.Get_Out());
-          PID_YawSpeed.Set_Now(Yaw_Rate_Rad_S);
+          PID_YawSpeed.Set_Now(0.4f * Now_Omega + 0.6f * Yaw_Rate_Rad_S);
           PID_YawSpeed.TIM_Calculate_PeriodElapsedCallback();
           Output_Moment_Z = PID_YawSpeed.Get_Out();
           break;

@@ -37,9 +37,6 @@ public:
   // 底盘速度值PID
   Class_PID PID_Velocity_X;
 
-  // 底盘角速度PID
-  Class_PID PID_Omega;
-
   // 底盘yaw角速度PID
   Class_PID PID_YawSpeed;
 
@@ -54,6 +51,7 @@ public:
 
   inline float Get_Now_Velocity_X();
   inline float Get_Now_Omega();
+  inline float Get_Now_Current_Sum() const;
 
   inline float Get_Target_Velocity_X();
   inline float Get_Target_Omega();
@@ -123,6 +121,8 @@ protected:
   void Dynamics_Inverse_Resolution();
 
   void Output_To_Motor();
+
+  float Get_Shortest_Yaw_Error(float target_yaw, float current_yaw);
 };
 
 /**
@@ -144,6 +144,24 @@ Class_Chassis_FW::Get_Now_Velocity_X()
 inline float Class_Chassis_FW::Get_Now_Omega()
 {
   return (Now_Omega);
+}
+
+/**
+ * @brief 获取四个电机当前电流绝对值之和
+ *
+ * @return float 四个电机当前电流绝对值之和, A
+ */
+inline float Class_Chassis_FW::Get_Now_Current_Sum() const
+{
+  float Current_Sum = 0.0f;
+
+  for (int i = 0; i < 4; i++)
+  {
+    const float Current = Motor_Wheel[i].Get_Now_Current();
+    Current_Sum += (Current < 0) ? -Current : Current;
+  }
+
+  return (Current_Sum);
 }
 
 /**

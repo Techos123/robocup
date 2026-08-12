@@ -390,7 +390,7 @@ public:
 
   inline float Get_Now_Omega() const;
 
-  inline int16_t Get_Now_Current() const;
+  inline float Get_Now_Current() const;
 
   inline float Get_Now_Torque() const;
 
@@ -911,13 +911,13 @@ inline float Class_Motor_DJI_C620::Get_Now_Omega() const
 }
 
 /**
- * @brief 获取当前的原始电流值
+ * @brief 获取当前的扭矩电流, A
  *
- * @return int16_t 当前的原始电流值
+ * @return float 当前的扭矩电流, A, 范围-20~20A
  */
-inline int16_t Class_Motor_DJI_C620::Get_Now_Current() const
+inline float Class_Motor_DJI_C620::Get_Now_Current() const
 {
-  return (Rx_Data.Now_Current);
+  return (static_cast<float>(Rx_Data.Now_Current) / CURRENT_TO_OUT);
 }
 
 /**
