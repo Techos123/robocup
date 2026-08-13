@@ -23,7 +23,7 @@ void Class_Chassis_FW::Init()
   Chassis_Yaw_Control_Type = Chassis_Yaw_Control_Type_ANGLE;
 
   // 底盘速度xPID, 输出摩擦力
-  PID_Velocity_X.Init(1.0f, 0.0f, 0.0f, 1.3f, 2.0f, 20.0f, 0.002f);
+  PID_Velocity_X.Init(278.0f, 0.0f, 0.0f, 1.3f, 2.0f, 20.0f, 0.002f);
 
   // 底盘yaw角速度PID, 输出扭矩
   PID_YawSpeed.Init(1.0f, 0.0f, 0.0f, 0.0f, 0.5f, 5.0f, 0.002f);
