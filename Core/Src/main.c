@@ -70,8 +70,10 @@ float Yaw, Pitch, Roll;
 bool BMI088_Initialized = false;
 uint32_t Last_USB_Output_Tick = 0;
 uint32_t Counter = 0;
+uint16_t BMI088_Temperature_Divider = 0;
 float V = 0.0f;
 float A = 0.0f;
+float W = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -114,6 +116,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   else if (htim->Instance == TIM8)
   {
     BSP_BMI088.TIM_125us_Calculate_PeriodElapsedCallback();
+    BMI088_Temperature_Divider++;
+    if (BMI088_Temperature_Divider >= 1024U)
+    {
+      BMI088_Temperature_Divider = 0;
+      BSP_BMI088.TIM_128ms_Calculate_PeriodElapsedCallback();
+    }
   }
 }
 
@@ -121,6 +129,7 @@ static char Variable_Assignment_List[][SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LEN
     // 电机调PID
     "v",
     "a",
+    "w",
     "xp",
     "xi",
     "xd",
@@ -159,50 +168,57 @@ void Synex_Call_Back(uint8_t *Buffer, uint16_t Length)
     }
     case (2):
     {
-      car.PID_Velocity_X.Set_K_P(synex.Get_Variable_Value());
+      W = synex.Get_Variable_Value();
+      car.Set_Target_Omega(W);
       break;
     }
     case (3):
     {
-      car.PID_Velocity_X.Set_K_I(synex.Get_Variable_Value());
+      car.PID_Velocity_X.Set_K_P(synex.Get_Variable_Value());
       break;
     }
     case (4):
     {
-      car.PID_Velocity_X.Set_K_D(synex.Get_Variable_Value());
+      car.PID_Velocity_X.Set_K_I(synex.Get_Variable_Value());
       break;
     }
+
     case (5):
     {
-      car.PID_YawSpeed.Set_K_P(synex.Get_Variable_Value());
+      car.PID_Velocity_X.Set_K_D(synex.Get_Variable_Value());
       break;
     }
     case (6):
     {
-      car.PID_YawSpeed.Set_K_I(synex.Get_Variable_Value());
+      car.PID_YawSpeed.Set_K_P(synex.Get_Variable_Value());
       break;
     }
     case (7):
     {
-      car.PID_YawSpeed.Set_K_D(synex.Get_Variable_Value());
+      car.PID_YawSpeed.Set_K_I(synex.Get_Variable_Value());
       break;
     }
     case (8):
     {
-      car.PID_YawAngle.Set_K_P(synex.Get_Variable_Value());
+      car.PID_YawSpeed.Set_K_D(synex.Get_Variable_Value());
       break;
     }
     case (9):
     {
-      car.PID_YawAngle.Set_K_I(synex.Get_Variable_Value());
+      car.PID_YawAngle.Set_K_P(synex.Get_Variable_Value());
       break;
     }
     case (10):
     {
-      car.PID_YawAngle.Set_K_D(synex.Get_Variable_Value());
+      car.PID_YawAngle.Set_K_I(synex.Get_Variable_Value());
       break;
     }
     case (11):
+    {
+      car.PID_YawAngle.Set_K_D(synex.Get_Variable_Value());
+      break;
+    }
+    case (12):
     {
       car.Set_Chassis_Control_Type(Chassis_Control_Type_DISABLE);
       break;
@@ -304,7 +320,7 @@ int main(void)
   }
   Last_USB_Output_Tick = HAL_GetTick();
   UART_Init(&huart7, Synex_Call_Back, 512);
-  synex.Init(&huart7, Serialplot_Checksum_8_DISABLE, 12, (char **)Variable_Assignment_List, Serialplot_Data_Type_FLOAT);
+  synex.Init(&huart7, Serialplot_Checksum_8_DISABLE, 13, (char **)Variable_Assignment_List, Serialplot_Data_Type_FLOAT);
 
   car.Init();
   car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_ANGLE);
@@ -322,22 +338,16 @@ int main(void)
   while (1)
   {
     const uint32_t now_tick = HAL_GetTick();
-    if (BMI088_Initialized && (uint32_t)(now_tick - Last_USB_Output_Tick) >= 100)
+    Struct_BMI088_Attitude_Snapshot attitude_snapshot;
+    if (BMI088_Initialized)
     {
-      Last_USB_Output_Tick = now_tick;
-      const Class_Matrix_f32<3, 1> euler_angle = BSP_BMI088.Get_Euler_Angle();
-      Yaw = euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
-      Pitch = euler_angle[1][0] / BASIC_MATH_DEG_TO_RAD;
-      Roll = euler_angle[2][0] / BASIC_MATH_DEG_TO_RAD;
+      attitude_snapshot = BSP_BMI088.Get_Attitude_Snapshot();
     }
-
     Struct_Chassis_Attitude_Feedback attitude_feedback;
-    if (BMI088_Initialized && BSP_BMI088.Get_Attitude_Valid())
+    if (attitude_snapshot.Valid)
     {
-      const Class_Matrix_f32<3, 1> chassis_euler_angle = BSP_BMI088.Get_Euler_Angle();
-      const Class_Matrix_f32<3, 1> chassis_gyro_body = BSP_BMI088.Get_Gyro_Body();
-      attitude_feedback.Yaw_Deg = chassis_euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
-      attitude_feedback.Yaw_Rate_Rad_S = chassis_gyro_body[2][0];
+      attitude_feedback.Yaw_Deg = attitude_snapshot.Euler_Angle[0][0] / BASIC_MATH_DEG_TO_RAD;
+      attitude_feedback.Yaw_Rate_Rad_S = attitude_snapshot.Gyro_Body[2][0];
       attitude_feedback.Valid = true;
     }
     car.Set_Attitude_Feedback(attitude_feedback);
@@ -349,8 +359,20 @@ int main(void)
     }
     float current_sum = car.Get_Now_Current_Sum();
     float now_velocity_x = car.Get_Now_Velocity_X();
-    synex.Set_Data(&V, &now_velocity_x, &A, &Yaw, &Pitch, &Roll, &current_sum);
-    synex.JustFloat_Output();
+    if ((uint32_t)(now_tick - Last_USB_Output_Tick) >= 20U)
+    {
+      Last_USB_Output_Tick = now_tick;
+      if (attitude_snapshot.Valid)
+      {
+        Yaw = attitude_snapshot.Euler_Angle[0][0] / BASIC_MATH_DEG_TO_RAD;
+        Pitch = attitude_snapshot.Euler_Angle[1][0] / BASIC_MATH_DEG_TO_RAD;
+        Roll = attitude_snapshot.Euler_Angle[2][0] / BASIC_MATH_DEG_TO_RAD;
+      }
+
+      float omega = car.Get_Now_Omega();
+      synex.Set_Data(&V, &now_velocity_x, &W, &omega, &A, &Yaw, &Pitch, &Roll, &current_sum);
+      synex.JustFloat_Output();
+    }
     // 通信设备回调数据
     TIM_1ms_CAN_PeriodElapsedCallback();
 

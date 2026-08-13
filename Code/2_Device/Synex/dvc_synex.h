@@ -53,7 +53,7 @@ enum Enum_Serialplot_Data_Type
 };
 
 /**
- * @brief Specialized, 串口绘图工具, 最多支持12个通道
+ * @brief Specialized, 串口绘图工具, 最多支持32个通道
  *
  */
 class Class_Serialplot
@@ -78,6 +78,8 @@ public:
 
     uint8_t JustFloat_Output();
 
+    inline uint32_t Get_Tx_Busy_Skip_Count() const;
+
     uint8_t ROSdata_Output();
 
 
@@ -100,13 +102,14 @@ protected:
     // 内部变量
 
     // 需要绘图的各个变量数据地址
-    const void *Data[25];
+    const void *Data[32];
     // 当前发送的数据长度, 等价于新数据偏移量
     uint8_t Data_Number = 0;
     // 当前接收的指令在指令字典中的编号
     int8_t Variable_Index = 0;
     // 当前接收的指令在指令字典中的值
     float Variable_Value = 0.0f;
+    uint32_t Tx_Busy_Skip_Count = 0;
 
     // 读变量
 
@@ -149,6 +152,11 @@ inline float Class_Serialplot::Get_Variable_Value()
     return (Variable_Value);
 }
 
+inline uint32_t Class_Serialplot::Get_Tx_Busy_Skip_Count() const
+{
+    return Tx_Busy_Skip_Count;
+}
+
 /**
  * @brief 添加被发送的数据，通道数量由编译器从实参个数自动推导
  *
@@ -158,6 +166,7 @@ inline float Class_Serialplot::Get_Variable_Value()
 template <typename... Args>
 inline void Class_Serialplot::Set_Data(const Args *...args)
 {
+    static_assert(sizeof...(Args) <= 32, "Class_Serialplot supports at most 32 channels");
     const void *ptrs[] = {static_cast<const void *>(args)...};
     const uint8_t n = sizeof...(Args);
     for (int i = 0; i < n; i++)

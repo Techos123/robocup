@@ -55,7 +55,7 @@ protected:
     // 内部变量
 
     // 定时器溢出计数, 一小时溢出一次
-    uint32_t TIM_Overflow_Count = 0;
+    volatile uint32_t TIM_Overflow_Count = 0;
 
     // 写变量
 
