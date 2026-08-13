@@ -306,6 +306,7 @@ int main(void)
   MX_SPI2_Init();
   MX_TIM4_Init();
   MX_TIM8_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   BSP_Power.Init(false, false, true);
   SYS_Timestamp.Init(&htim5);
@@ -319,8 +320,8 @@ int main(void)
     HAL_TIM_Base_Start_IT(&htim8);
   }
   Last_USB_Output_Tick = HAL_GetTick();
-  UART_Init(&huart7, Synex_Call_Back, 512);
-  synex.Init(&huart7, Serialplot_Checksum_8_DISABLE, 13, (char **)Variable_Assignment_List, Serialplot_Data_Type_FLOAT);
+  UART_Init(&huart1, Synex_Call_Back, 512);
+  synex.Init(&huart1, Serialplot_Checksum_8_DISABLE, 13, (char **)Variable_Assignment_List, Serialplot_Data_Type_FLOAT);
 
   car.Init();
   car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_ANGLE);
