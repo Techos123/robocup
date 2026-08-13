@@ -36,8 +36,8 @@
 #include "drv_can.h"
 #include "drv_spi.h"
 #include "drv_usb.h"
+#include "dvc_motion_protocol.h"
 #include "dvc_motor_dji.h"
-#include "dvc_synex.h"
 #include "sys_timestamp.h"
 
 // #include "User_Code\2_Device\Serialplot\dvc_serialplot.h"
@@ -46,6 +46,12 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+
+enum Enum_Turn_State
+{
+  Turn_State_IDLE = 0,
+  Turn_State_ACTIVE,
+};
 
 /* USER CODE END PTD */
 
@@ -63,15 +69,19 @@
 
 /* USER CODE BEGIN PV */
 // Class_Serialplot serialplot;
-Class_Serialplot synex;
+Class_Motion_Protocol_USB ros;
 Class_Chassis_FW car;
 Class_Music music;
-float Yaw, Pitch, Roll;
+float Yaw = 0.0f;
 bool BMI088_Initialized = false;
 uint32_t Last_USB_Output_Tick = 0;
 uint32_t Counter = 0;
-float V = 0.0f;
-float A = 0.0f;
+volatile float V = 0.0f;
+volatile float A = 0.0f;
+volatile float Angle_Deg = 0.0f;
+volatile float Target_Angle = 0.0f;
+volatile bool Turn_Flag = false;
+volatile Enum_Turn_State Turn_State = Turn_State_IDLE;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -83,6 +93,23 @@ void PeriphCommonClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static float Main_Get_Shortest_Yaw_Error(float target_yaw_deg,
+                                         float current_yaw_deg)
+{
+  float error_deg = target_yaw_deg - current_yaw_deg;
+
+  while (error_deg > 180.0f)
+  {
+    error_deg -= 360.0f;
+  }
+  while (error_deg < -180.0f)
+  {
+    error_deg += 360.0f;
+  }
+
+  return error_deg;
+}
+
 void SPI2_BMI088_Call_Back(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t Tx_Length, uint16_t Rx_Length)
 {
   (void)Tx_Buffer;
@@ -117,94 +144,35 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
 }
 
-static char Variable_Assignment_List[][SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LENGTH] = {
-    // 电机调PID
-    "v",
-    "a",
-    "xp",
-    "xi",
-    "xd",
-    "wp",
-    "wi",
-    "wd",
-    "ap",
-    "ai",
-    "ad",
-    "stop"
-
-};
-
-/**
- * @brief HAL库UART接收上位机消息DMA空闲中断
- *
- * @param huart UART编号
- * @param Size 长度
- */
-void Synex_Call_Back(uint8_t *Buffer, uint16_t Length)
+void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
 {
-  synex.UART_RxCpltCallback(Buffer, Length);
-  switch (synex.Get_Variable_Index())
+  switch (Command.Command)
   {
-    case (0):
+    case (Motion_Protocol_Command_VEL):
     {
-      V = synex.Get_Variable_Value();
-      car.Set_Target_Velocity_X(V);
+      if (!Turn_Flag)
+      {
+        V = Command.Linear_X;
+      }
+
       break;
     }
-    case (1):
+
+    case (Motion_Protocol_Command_STOP):
     {
-      A = synex.Get_Variable_Value();
-      car.Set_Target_Angle(A);
+      V = 0.0f;
+
       break;
     }
-    case (2):
+
+    case (Motion_Protocol_Command_TURN):
     {
-      car.PID_Velocity_X.Set_K_P(synex.Get_Variable_Value());
-      break;
-    }
-    case (3):
-    {
-      car.PID_Velocity_X.Set_K_I(synex.Get_Variable_Value());
-      break;
-    }
-    case (4):
-    {
-      car.PID_Velocity_X.Set_K_D(synex.Get_Variable_Value());
-      break;
-    }
-    case (5):
-    {
-      car.PID_YawSpeed.Set_K_P(synex.Get_Variable_Value());
-      break;
-    }
-    case (6):
-    {
-      car.PID_YawSpeed.Set_K_I(synex.Get_Variable_Value());
-      break;
-    }
-    case (7):
-    {
-      car.PID_YawSpeed.Set_K_D(synex.Get_Variable_Value());
-      break;
-    }
-    case (8):
-    {
-      car.PID_YawAngle.Set_K_P(synex.Get_Variable_Value());
-      break;
-    }
-    case (9):
-    {
-      car.PID_YawAngle.Set_K_I(synex.Get_Variable_Value());
-      break;
-    }
-    case (10):
-    {
-      car.PID_YawAngle.Set_K_D(synex.Get_Variable_Value());
-      break;
-    }
-    case (11):
-    {
-      car.Set_Chassis_Control_Type(Chassis_Control_Type_DISABLE);
+      if (Turn_State == Turn_State_IDLE && !Turn_Flag)
+      {
+        Angle_Deg = Command.Angle_Deg; // Command.Angle_Deg：相对当前方向，逆时针为正
+        V = 0.0f;
+        Turn_Flag = true;
+      }
       break;
     }
     default:
@@ -303,13 +271,12 @@ int main(void)
     HAL_TIM_Base_Start_IT(&htim8);
   }
   Last_USB_Output_Tick = HAL_GetTick();
-  UART_Init(&huart7, Synex_Call_Back, 512);
-  synex.Init(&huart7, Serialplot_Checksum_8_DISABLE, 12, (char **)Variable_Assignment_List, Serialplot_Data_Type_FLOAT);
 
   car.Init();
-  car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_ANGLE);
 
   CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
+
+  ros.Init(ROS_Call_Back);
 
   music.Play_Startup();
 
@@ -321,15 +288,37 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    const uint32_t now_tick = HAL_GetTick();
-    if (BMI088_Initialized && (uint32_t)(now_tick - Last_USB_Output_Tick) >= 100)
-    {
-      Last_USB_Output_Tick = now_tick;
-      const Class_Matrix_f32<3, 1> euler_angle = BSP_BMI088.Get_Euler_Angle();
-      Yaw = euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
-      Pitch = euler_angle[1][0] / BASIC_MATH_DEG_TO_RAD;
-      Roll = euler_angle[2][0] / BASIC_MATH_DEG_TO_RAD;
-    }
+    // const uint32_t now_tick = HAL_GetTick();
+    // if (BMI088_Initialized && (uint32_t)(now_tick - Last_USB_Output_Tick) >= 100)
+    // {
+    //   Last_USB_Output_Tick = now_tick;
+    //   const Class_Matrix_f32<3, 1> euler_angle = BSP_BMI088.Get_Euler_Angle();
+    //   Yaw = euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
+    // }
+
+    // if (!turn_active &&
+    //     attitude_feedback.Valid &&
+    //     fabsf(command.Angle_Deg) <= 180.0f)
+    // {
+    //   turn_target_yaw_deg =
+    //       attitude_feedback.Yaw_Deg + command.Angle_Deg;
+
+    //   // 可归一化到 [-180, 180]
+    //   if (turn_target_yaw_deg > 180.0f)
+    //     turn_target_yaw_deg -= 360.0f;
+    //   else if (turn_target_yaw_deg < -180.0f)
+    //     turn_target_yaw_deg += 360.0f;
+
+    //   car.Set_Target_Velocity_X(0.0f);
+    //   car.Set_Target_Omega(0.0f);
+    //   car.Set_Chassis_Yaw_Control_Type(
+    //       Chassis_Yaw_Control_Type_ANGLE);
+    //   car.Set_Target_Angle(turn_target_yaw_deg);
+
+    //   turn_active = true;
+    //   turn_stable_timing = false;
+    //   turn_done_submitted = false;
+    // }
 
     Struct_Chassis_Attitude_Feedback attitude_feedback;
     if (BMI088_Initialized && BSP_BMI088.Get_Attitude_Valid())
@@ -342,15 +331,48 @@ int main(void)
     }
     car.Set_Attitude_Feedback(attitude_feedback);
 
+    const bool turn_in_progress =
+        (Turn_State == Turn_State_ACTIVE) || Turn_Flag;
+    car.Set_Target_Velocity_X(turn_in_progress ? 0.0f : V);
+    if (Turn_State == Turn_State_IDLE &&
+        Turn_Flag &&
+        attitude_feedback.Valid)
+    {
+      Target_Angle = Angle_Deg + attitude_feedback.Yaw_Deg;
+      if (Target_Angle > 180.0f)
+      {
+        Target_Angle -= 360.0f;
+      }
+      else if (Target_Angle < -180.0f)
+      {
+        Target_Angle += 360.0f;
+      }
+      car.Set_Target_Angle(Target_Angle);
+      Turn_State = Turn_State_ACTIVE;
+      Turn_Flag = false;
+    }
+
     if (Counter % 2 == 0)
     {
       car.TIM_2ms_Resolution_PeriodElapsedCallback();
       car.TIM_2ms_Control_PeriodElapsedCallback();
     }
-    float current_sum = car.Get_Now_Current_Sum();
-    float now_velocity_x = car.Get_Now_Velocity_X();
-    synex.Set_Data(&V, &now_velocity_x, &A, &Yaw, &Pitch, &Roll, &current_sum);
-    synex.JustFloat_Output();
+
+    float yaw_error_deg =
+        Main_Get_Shortest_Yaw_Error(Target_Angle, attitude_feedback.Yaw_Deg);
+    float current_yaw_rate_rad_s = attitude_feedback.Yaw_Rate_Rad_S;
+
+    if (Turn_State == Turn_State_ACTIVE &&
+        fabsf(yaw_error_deg) <= 2.0f &&
+        fabsf(current_yaw_rate_rad_s) <= 0.05f &&
+        fabsf(car.Get_Now_Velocity_X()) <= 0.02f)
+    {
+      const uint8_t status = ros.Send_Turn_Done();
+      if (status == USBD_OK)
+      {
+        Turn_State = Turn_State_IDLE;
+      }
+    }
     // 通信设备回调数据
     TIM_1ms_CAN_PeriodElapsedCallback();
 
