@@ -73,6 +73,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Code/2_Device/BSP/BMI088/bsp_bmi088.cpp
     Code/2_Device/BSP/BMI088/Accel/bsp_bmi088_accel.cpp
     Code/2_Device/BSP/BMI088/Gyro/bsp_bmi088_gyro.cpp
+    Code/2_Device/AHRS/AHRS_WHEELTEC/dvc_ahrs_wheeltec.cpp
     Code/2_Device/Synex/dvc_synex.cpp
 
     Code/3_Chariot/1_Module/Chassis/Four_whell/crt_fw.cpp
@@ -100,6 +101,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Code/2_Device/BSP/BMI088
     Code/2_Device/BSP/BMI088/Accel
     Code/2_Device/BSP/BMI088/Gyro
+    Code/2_Device/AHRS/AHRS_WHEELTEC
     Code/2_Device/Virtual_Serialport
     Code/2_Device/Synex
     

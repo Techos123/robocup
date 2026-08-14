@@ -614,9 +614,11 @@ void Class_AHRS_WHEELTEC::Calibrate_AHRS_Offset()
   float sum_omega_roll = 0.0f;
   float sum_omega_pitch = 0.0f;
   float sum_omega_yaw = 0.0f;
-  float sum_angle_roll = 0.0f;
+  float sum_angle_roll_sin = 0.0f;
+  float sum_angle_roll_cos = 0.0f;
   float sum_angle_pitch = 0.0f;
-  float sum_angle_yaw = 0.0f;
+  float sum_angle_yaw_sin = 0.0f;
+  float sum_angle_yaw_cos = 0.0f;
   const uint8_t N = 100;
 
   for (uint8_t i = 0; i < N; i++)
@@ -637,17 +639,21 @@ void Class_AHRS_WHEELTEC::Calibrate_AHRS_Offset()
     sum_omega_roll += Data_AHRS.Omega_Roll;
     sum_omega_pitch += Data_AHRS.Omega_Pitch;
     sum_omega_yaw += Data_AHRS.Omega_Yaw;
-    sum_angle_roll += Data_AHRS.Angle_Roll;
+    // Roll原始字段在±PI处跳变，使用环形平均避免边界失真。
+    sum_angle_roll_sin += sinf(Data_AHRS.Angle_Roll);
+    sum_angle_roll_cos += cosf(Data_AHRS.Angle_Roll);
     sum_angle_pitch += Data_AHRS.Angle_Pitch;
-    sum_angle_yaw += Data_AHRS.Angle_Yaw;
+    // Yaw原始字段为弧度，使用环形平均避免跨越0/2PI时失真。
+    sum_angle_yaw_sin += sinf(Data_AHRS.Angle_Yaw);
+    sum_angle_yaw_cos += cosf(Data_AHRS.Angle_Yaw);
   }
 
   Omega_Roll_Offset = sum_omega_roll / (float)N;
   Omega_Pitch_Offset = sum_omega_pitch / (float)N;
   Omega_Yaw_Offset = sum_omega_yaw / (float)N;
-  Angle_Roll_Offset = sum_angle_roll / (float)N;
+  Angle_Roll_Offset = atan2f(sum_angle_roll_sin, sum_angle_roll_cos);
   Angle_Pitch_Offset = sum_angle_pitch / (float)N;
-  Angle_Yaw_Offset = sum_angle_yaw / (float)N;
+  Angle_Yaw_Offset = atan2f(sum_angle_yaw_sin, sum_angle_yaw_cos);
   Is_Calibrated = 1;
 }
 

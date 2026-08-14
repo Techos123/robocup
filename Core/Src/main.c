@@ -20,22 +20,21 @@
 #include "main.h"
 #include "dma.h"
 #include "fdcan.h"
+#include "gpio.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
 #include "usb_device.h"
-#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "alg_basic.h"
-#include "bsp_bmi088.h"
 #include "bsp_power.h"
 #include "crt_fw.h"
 #include "crt_music.h"
 #include "drv_can.h"
-#include "drv_spi.h"
+#include "drv_uart.h"
 #include "drv_usb.h"
+#include "dvc_ahrs_wheeltec.h"
 #include "dvc_motor_dji.h"
 #include "dvc_synex.h"
 #include "sys_timestamp.h"
@@ -66,11 +65,10 @@
 Class_Serialplot synex;
 Class_Chassis_FW car;
 Class_Music music;
+Class_AHRS_WHEELTEC wt;
 float Yaw, Pitch, Roll;
-bool BMI088_Initialized = false;
 uint32_t Last_USB_Output_Tick = 0;
 uint32_t Counter = 0;
-uint16_t BMI088_Temperature_Divider = 0;
 float V = 0.0f;
 float A = 0.0f;
 float W = 0.0f;
@@ -85,22 +83,9 @@ void PeriphCommonClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void SPI2_BMI088_Call_Back(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t Tx_Length, uint16_t Rx_Length)
+void WT_UART_Call_Back(uint8_t *Buffer, uint16_t Length)
 {
-  (void)Tx_Buffer;
-  (void)Rx_Buffer;
-  (void)Tx_Length;
-  (void)Rx_Length;
-  BSP_BMI088.SPI_RxCpltCallback();
-}
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if (BMI088_Initialized &&
-      (GPIO_Pin == BMI088_ACCEL__INTERRUPT_Pin || GPIO_Pin == BMI088_GYRO__INTERRUPT_Pin))
-  {
-    BSP_BMI088.EXTI_Flag_Callback(GPIO_Pin);
-  }
+  wt.UART_RxCpltCallback(Buffer, Length);
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -108,20 +93,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM5)
   {
     SYS_Timestamp.TIM_3600s_PeriodElapsedCallback();
-  }
-  else if (htim->Instance == TIM4)
-  {
-    BSP_BMI088.TIM_10us_Calculate_PeriodElapsedCallback();
-  }
-  else if (htim->Instance == TIM8)
-  {
-    BSP_BMI088.TIM_125us_Calculate_PeriodElapsedCallback();
-    BMI088_Temperature_Divider++;
-    if (BMI088_Temperature_Divider >= 1024U)
-    {
-      BMI088_Temperature_Divider = 0;
-      BSP_BMI088.TIM_128ms_Calculate_PeriodElapsedCallback();
-    }
   }
 }
 
@@ -260,9 +231,9 @@ void CAN3_Motor_Call_Back(FDCAN_RxHeaderTypeDef &Header, uint8_t *Buffer)
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
 
@@ -312,19 +283,16 @@ int main(void)
   SYS_Timestamp.Init(&htim5);
   HAL_TIM_Base_Start_IT(&htim5);
 
-  SPI_Init(&hspi2, SPI2_BMI088_Call_Back);
-  BMI088_Initialized = BSP_BMI088.Init();
-  if (BMI088_Initialized)
-  {
-    HAL_TIM_Base_Start_IT(&htim4);
-    HAL_TIM_Base_Start_IT(&htim8);
-  }
+  UART_Init(&huart7, WT_UART_Call_Back, 128);
+  wt.Init(&huart7);
+  // 校准完成后立即确认当前IMU状态，避免启动阶段输出默认零角度。
+  wt.TIM_100ms_Alive_PeriodElapsedCallback();
   Last_USB_Output_Tick = HAL_GetTick();
   UART_Init(&huart1, Synex_Call_Back, 512);
   synex.Init(&huart1, Serialplot_Checksum_8_DISABLE, 13, (char **)Variable_Assignment_List, Serialplot_Data_Type_FLOAT);
 
   car.Init();
-  car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_ANGLE);
+  car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_OMEGA);
 
   CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
 
@@ -339,16 +307,14 @@ int main(void)
   while (1)
   {
     const uint32_t now_tick = HAL_GetTick();
-    Struct_BMI088_Attitude_Snapshot attitude_snapshot;
-    if (BMI088_Initialized)
-    {
-      attitude_snapshot = BSP_BMI088.Get_Attitude_Snapshot();
-    }
     Struct_Chassis_Attitude_Feedback attitude_feedback;
-    if (attitude_snapshot.Valid)
+    if (wt.Get_Status() == AHRS_WHEELTEC_Status_ENABLE)
     {
-      attitude_feedback.Yaw_Deg = attitude_snapshot.Euler_Angle[0][0] / BASIC_MATH_DEG_TO_RAD;
-      attitude_feedback.Yaw_Rate_Rad_S = attitude_snapshot.Gyro_Body[2][0];
+      Yaw = wt.Get_Angle_Yaw();
+      Pitch = wt.Get_Angle_Pitch();
+      Roll = wt.Get_Angle_Roll();
+      attitude_feedback.Yaw_Deg = Yaw;
+      attitude_feedback.Yaw_Rate_Rad_S = wt.Get_Omega_Yaw();
       attitude_feedback.Valid = true;
     }
     car.Set_Attitude_Feedback(attitude_feedback);
@@ -363,24 +329,24 @@ int main(void)
     if ((uint32_t)(now_tick - Last_USB_Output_Tick) >= 20U)
     {
       Last_USB_Output_Tick = now_tick;
-      if (attitude_snapshot.Valid)
+      if (wt.Get_Status() == AHRS_WHEELTEC_Status_ENABLE)
       {
-        Yaw = attitude_snapshot.Euler_Angle[0][0] / BASIC_MATH_DEG_TO_RAD;
-        Pitch = attitude_snapshot.Euler_Angle[1][0] / BASIC_MATH_DEG_TO_RAD;
-        Roll = attitude_snapshot.Euler_Angle[2][0] / BASIC_MATH_DEG_TO_RAD;
+        Yaw = wt.Get_Angle_Yaw();
+        Pitch = wt.Get_Angle_Pitch();
+        Roll = wt.Get_Angle_Roll();
       }
-
-      float omega = car.Get_Now_Omega();
-      synex.Set_Data(&V, &now_velocity_x, &W, &omega, &A, &Yaw, &Pitch, &Roll, &current_sum);
-      synex.JustFloat_Output();
     }
     // 通信设备回调数据
     TIM_1ms_CAN_PeriodElapsedCallback();
+    float omega = car.Get_Now_Omega();
+    synex.Set_Data(&V, &now_velocity_x, &W, &omega, &A, &Yaw, &Pitch, &Roll, &current_sum);
+    synex.JustFloat_Output();
 
     Counter++;
     if (Counter >= 100)
     {
       Counter = 0;
+      wt.TIM_100ms_Alive_PeriodElapsedCallback();
       car.TIM_100ms_Alive_PeriodElapsedCallback();
     }
 
@@ -394,27 +360,29 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
+ * @brief System Clock Configuration
+ * @retval None
+ */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Supply configuration update enable
-  */
+   */
   HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
-  while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+  while (!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY))
+  {
+  }
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -433,10 +401,8 @@ void SystemClock_Config(void)
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
-                              |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
+   */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2 | RCC_CLOCKTYPE_D3PCLK1 | RCC_CLOCKTYPE_D1PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
@@ -452,16 +418,16 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief Peripherals Common Clock Configuration
-  * @retval None
-  */
+ * @brief Peripherals Common Clock Configuration
+ * @retval None
+ */
 void PeriphCommonClock_Config(void)
 {
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
   /** Initializes the peripherals clock
-  */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI2|RCC_PERIPHCLK_FDCAN;
+   */
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_SPI2 | RCC_PERIPHCLK_FDCAN;
   PeriphClkInitStruct.PLL2.PLL2M = 2;
   PeriphClkInitStruct.PLL2.PLL2N = 40;
   PeriphClkInitStruct.PLL2.PLL2P = 6;
@@ -483,9 +449,9 @@ void PeriphCommonClock_Config(void)
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -499,12 +465,12 @@ void Error_Handler(void)
 }
 #ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
