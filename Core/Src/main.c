@@ -101,12 +101,9 @@ static char Variable_Assignment_List[][SERIALPLOT_RX_VARIABLE_ASSIGNMENT_MAX_LEN
     "v",
     "a",
     "w",
-    "xp",
-    "xi",
-    "xd",
-    "wp",
-    "wi",
-    "wd",
+    "mp",
+    "mi",
+    "md",
     "ap",
     "ai",
     "ad",
@@ -145,51 +142,36 @@ void Synex_Call_Back(uint8_t *Buffer, uint16_t Length)
     }
     case (3):
     {
-      car.PID_Velocity_X.Set_K_P(synex.Get_Variable_Value());
+      car.Set_Wheel_Omega_PID_K_P(synex.Get_Variable_Value());
       break;
     }
     case (4):
     {
-      car.PID_Velocity_X.Set_K_I(synex.Get_Variable_Value());
+      car.Set_Wheel_Omega_PID_K_I(synex.Get_Variable_Value());
       break;
     }
 
     case (5):
     {
-      car.PID_Velocity_X.Set_K_D(synex.Get_Variable_Value());
+      car.Set_Wheel_Omega_PID_K_D(synex.Get_Variable_Value());
       break;
     }
     case (6):
     {
-      car.PID_YawSpeed.Set_K_P(synex.Get_Variable_Value());
+      car.PID_YawAngle.Set_K_P(synex.Get_Variable_Value());
       break;
     }
     case (7):
     {
-      car.PID_YawSpeed.Set_K_I(synex.Get_Variable_Value());
+      car.PID_YawAngle.Set_K_I(synex.Get_Variable_Value());
       break;
     }
     case (8):
     {
-      car.PID_YawSpeed.Set_K_D(synex.Get_Variable_Value());
-      break;
-    }
-    case (9):
-    {
-      car.PID_YawAngle.Set_K_P(synex.Get_Variable_Value());
-      break;
-    }
-    case (10):
-    {
-      car.PID_YawAngle.Set_K_I(synex.Get_Variable_Value());
-      break;
-    }
-    case (11):
-    {
       car.PID_YawAngle.Set_K_D(synex.Get_Variable_Value());
       break;
     }
-    case (12):
+    case (9):
     {
       car.Set_Chassis_Control_Type(Chassis_Control_Type_DISABLE);
       break;
@@ -289,10 +271,14 @@ int main(void)
   wt.TIM_100ms_Alive_PeriodElapsedCallback();
   Last_USB_Output_Tick = HAL_GetTick();
   UART_Init(&huart1, Synex_Call_Back, 512);
-  synex.Init(&huart1, Serialplot_Checksum_8_DISABLE, 13, (char **)Variable_Assignment_List, Serialplot_Data_Type_FLOAT);
+  synex.Init(&huart1,
+             Serialplot_Checksum_8_DISABLE,
+             sizeof(Variable_Assignment_List) / sizeof(Variable_Assignment_List[0]),
+             (char **)Variable_Assignment_List,
+             Serialplot_Data_Type_FLOAT);
 
   car.Init();
-  car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_OMEGA);
+  car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_ANGLE);
 
   CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
 

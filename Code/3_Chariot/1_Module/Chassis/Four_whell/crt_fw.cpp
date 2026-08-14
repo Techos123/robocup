@@ -19,38 +19,68 @@ void Class_Chassis_FW::Init()
   Angle_Yaw = 0.0f;
   Yaw_Rate_Rad_S = 0.0f;
   Target_Angle = 0.0f;
-  Output_Moment_Z = 0.0f;
+  Resolved_Target_Omega = 0.0f;
   Chassis_Yaw_Control_Type = Chassis_Yaw_Control_Type_OMEGA;
-
-  // 底盘速度xPID, 输出摩擦力
-  PID_Velocity_X.Init(1.0f, 0.0f, 0.0f, 40.0f, 20.0f, 300.0f, 0.002f);
-
-  // 底盘yaw角速度PID, 输出扭矩
-  PID_YawSpeed.Init(1.0f, 0.0f, 0.0f, 0.0f, 2.0f, 40.0f, 0.002f);
 
   // 底盘yaw角度PID, 输出角速度
   PID_YawAngle.Init(0.0f, 0.0f, 0.0f, 0.0f, 0.5f, 1.5f, 0.002f, 0.01f);
-
-  PID_Velocity_X.Reset();
-
-  PID_YawSpeed.Reset();
   PID_YawAngle.Reset();
+
+  // 电机初始化
+  Motor_Wheel[0].Init(&hfdcan3, Motor_DJI_ID_0x201, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
+  Motor_Wheel[1].Init(&hfdcan3, Motor_DJI_ID_0x202, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
+  Motor_Wheel[2].Init(&hfdcan3, Motor_DJI_ID_0x203, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
+  Motor_Wheel[3].Init(&hfdcan3, Motor_DJI_ID_0x204, Motor_DJI_Control_Method_OMEGA, 3591.0f / 187.0f);
 
   for (int i = 0; i < 4; i++)
   {
-    Target_Wheel_Torque[i] = 0.0f;
+    Target_Wheel_Omega[i] = 0.0f;
+    Motor_Wheel[i].PID_Omega.Init(0.0f, 0.0f, 0.0f, 0.0f,
+                                  Wheel_Torque_Max, Wheel_Torque_Max, 0.002f);
+    Motor_Wheel[i].PID_Omega.Reset();
   }
+}
 
-  // 电机初始化
-  Motor_Wheel[0].Init(&hfdcan3, Motor_DJI_ID_0x201, Motor_DJI_Control_Method_TORQUE, 3591.0f / 187.0f);
-  // 电机初始化
-  Motor_Wheel[1].Init(&hfdcan3, Motor_DJI_ID_0x202, Motor_DJI_Control_Method_TORQUE, 3591.0f / 187.0f);
+void Class_Chassis_FW::Set_Wheel_Omega_PID(float __K_P, float __K_I, float __K_D)
+{
+  for (int i = 0; i < 4; i++)
+  {
+    Motor_Wheel[i].PID_Omega.Set_K_P(__K_P);
+    Motor_Wheel[i].PID_Omega.Set_K_I(__K_I);
+    Motor_Wheel[i].PID_Omega.Set_K_D(__K_D);
+  }
+}
 
-  // 电机初始化
-  Motor_Wheel[2].Init(&hfdcan3, Motor_DJI_ID_0x203, Motor_DJI_Control_Method_TORQUE, 3591.0f / 187.0f);
+void Class_Chassis_FW::Set_Wheel_Omega_PID_K_P(float __K_P)
+{
+  for (int i = 0; i < 4; i++)
+  {
+    Motor_Wheel[i].PID_Omega.Set_K_P(__K_P);
+  }
+}
 
-  // 电机初始化
-  Motor_Wheel[3].Init(&hfdcan3, Motor_DJI_ID_0x204, Motor_DJI_Control_Method_TORQUE, 3591.0f / 187.0f);
+void Class_Chassis_FW::Set_Wheel_Omega_PID_K_I(float __K_I)
+{
+  for (int i = 0; i < 4; i++)
+  {
+    Motor_Wheel[i].PID_Omega.Set_K_I(__K_I);
+  }
+}
+
+void Class_Chassis_FW::Set_Wheel_Omega_PID_K_D(float __K_D)
+{
+  for (int i = 0; i < 4; i++)
+  {
+    Motor_Wheel[i].PID_Omega.Set_K_D(__K_D);
+  }
+}
+
+void Class_Chassis_FW::Reset_Wheel_Omega_PID()
+{
+  for (int i = 0; i < 4; i++)
+  {
+    Motor_Wheel[i].PID_Omega.Reset(0.0f, Motor_Wheel[i].Get_Now_Omega());
+  }
 }
 
 void Class_Chassis_FW::Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedback &__Feedback)
@@ -63,7 +93,7 @@ void Class_Chassis_FW::Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedb
     if (Chassis_Yaw_Control_Type == Chassis_Yaw_Control_Type_ANGLE)
     {
       Target_Angle_Initialized = false;
-      Output_Moment_Z = 0.0f;
+      Resolved_Target_Omega = 0.0f;
     }
     return;
   }
@@ -78,7 +108,6 @@ void Class_Chassis_FW::Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedb
     Target_Angle = Angle_Yaw;
     Target_Angle_Initialized = true;
     PID_YawAngle.Reset();
-    PID_YawSpeed.Reset(0.0f, Yaw_Rate_Rad_S);
   }
 }
 
@@ -90,9 +119,8 @@ void Class_Chassis_FW::Set_Chassis_Yaw_Control_Type(Enum_Chassis_Yaw_Control_Typ
   }
 
   Chassis_Yaw_Control_Type = __Chassis_Yaw_Control_Type;
-  Output_Moment_Z = 0.0f;
+  Resolved_Target_Omega = 0.0f;
 
-  PID_YawSpeed.Reset(0.0f, Yaw_Rate_Rad_S);
   PID_YawAngle.Reset();
 
   if (Chassis_Yaw_Control_Type == Chassis_Yaw_Control_Type_ANGLE)
@@ -116,7 +144,7 @@ void Class_Chassis_FW::Set_Chassis_Yaw_Control_Type(Enum_Chassis_Yaw_Control_Typ
 
 float Class_Chassis_FW::Get_Shortest_Yaw_Error(float target_yaw, float current_yaw)
 {
-  float error = target_yaw - current_yaw;
+  float error = current_yaw - target_yaw;
 
   while (error > 180.0f)
   {
@@ -157,11 +185,9 @@ void Class_Chassis_FW::TIM_2ms_Resolution_PeriodElapsedCallback()
  */
 void Class_Chassis_FW::TIM_2ms_Control_PeriodElapsedCallback()
 {
-  Output_To_Dynamics();
+  Resolve_Target_Omega();
 
-  // Kinematics_Inverse_Resolution();
-
-  Dynamics_Inverse_Resolution();
+  Kinematics_Inverse_Resolution();
 
   Output_To_Motor();
 }
@@ -180,39 +206,26 @@ void Class_Chassis_FW::Self_Resolution()
 }
 
 /**
- * @brief 输出到动力学状态
+ * @brief 根据航向控制模式解算目标角速度
  *
  */
-void Class_Chassis_FW::Output_To_Dynamics()
+void Class_Chassis_FW::Resolve_Target_Omega()
 {
   switch (Chassis_Control_Type)
   {
     case (Chassis_Control_Type_DISABLE):
     {
-
-      PID_Velocity_X.Set_Integral_Error(0.0f);
-
-      PID_YawSpeed.Set_Integral_Error(0.0f);
       PID_YawAngle.Set_Integral_Error(0.0f);
-      Output_Moment_Z = 0.0f;
+      Resolved_Target_Omega = 0.0f;
       break;
     }
     case (Chassis_Control_Type_NORMAL):
     {
-
-      PID_Velocity_X.Set_Target(Target_Velocity_X);
-      PID_Velocity_X.Set_Now(Now_Velocity_X);
-      PID_Velocity_X.TIM_Calculate_PeriodElapsedCallback();
-
       switch (Chassis_Yaw_Control_Type)
       {
         case (Chassis_Yaw_Control_Type_OMEGA):
         {
-
-          PID_YawSpeed.Set_Target(Target_Omega);
-          PID_YawSpeed.Set_Now(0.4f * Now_Omega + 0.6f * Yaw_Rate_Rad_S);
-          PID_YawSpeed.TIM_Calculate_PeriodElapsedCallback();
-          Output_Moment_Z = PID_YawSpeed.Get_Out();
+          Resolved_Target_Omega = Target_Omega;
           break;
         }
         case (Chassis_Yaw_Control_Type_ANGLE):
@@ -220,8 +233,7 @@ void Class_Chassis_FW::Output_To_Dynamics()
           if (!Attitude_Feedback_Valid || !Target_Angle_Initialized)
           {
             PID_YawAngle.Set_Integral_Error(0.0f);
-            PID_YawSpeed.Set_Integral_Error(0.0f);
-            Output_Moment_Z = 0.0f;
+            Resolved_Target_Omega = 0.0f;
             break;
           }
           float yaw_error = Get_Shortest_Yaw_Error(Target_Angle, Angle_Yaw);
@@ -229,10 +241,7 @@ void Class_Chassis_FW::Output_To_Dynamics()
           PID_YawAngle.Set_Now(0.0f);
           PID_YawAngle.TIM_Calculate_PeriodElapsedCallback();
 
-          PID_YawSpeed.Set_Target(PID_YawAngle.Get_Out());
-          PID_YawSpeed.Set_Now(0.4f * Now_Omega + 0.6f * Yaw_Rate_Rad_S);
-          PID_YawSpeed.TIM_Calculate_PeriodElapsedCallback();
-          Output_Moment_Z = PID_YawSpeed.Get_Out();
+          Resolved_Target_Omega = PID_YawAngle.Get_Out();
           break;
         }
       }
@@ -242,34 +251,27 @@ void Class_Chassis_FW::Output_To_Dynamics()
 }
 
 /**
- * @brief 动力学逆解算
+ * @brief 运动学逆解算
  *
  */
-void Class_Chassis_FW::Dynamics_Inverse_Resolution()
+void Class_Chassis_FW::Kinematics_Inverse_Resolution()
 {
-
-  float force_x, moment_z;
-  float torque_from_x, torque_from_yaw;
-
-  force_x = PID_Velocity_X.Get_Out();
-  moment_z = Output_Moment_Z;
-
-  torque_from_x = force_x * Wheel_Radius / 4.0f;
-  torque_from_yaw = moment_z * Wheel_Radius / (4.0f * Wheel_Point_Y);
-
-  // 每个轮的扭力
-  float tmp_torque[4];
-  // 解算到每个轮组的具体摩擦力
-  tmp_torque[0] = +torque_from_x - torque_from_yaw;
-  tmp_torque[1] = +torque_from_x - torque_from_yaw;
-  tmp_torque[2] = -torque_from_x - torque_from_yaw;
-  tmp_torque[3] = -torque_from_x - torque_from_yaw;
-
-  for (int i = 0; i < 4; i++)
+  if (Chassis_Control_Type == Chassis_Control_Type_DISABLE)
   {
-    // 摩擦力转换至扭矩
-    Target_Wheel_Torque[i] = tmp_torque[i];
+    for (int i = 0; i < 4; i++)
+    {
+      Target_Wheel_Omega[i] = 0.0f;
+    }
+    return;
   }
+
+  const float omega_from_x = Target_Velocity_X / Wheel_Radius;
+  const float omega_from_yaw = Resolved_Target_Omega * Wheel_Point_Y / Wheel_Radius;
+
+  Target_Wheel_Omega[0] = +omega_from_x - omega_from_yaw;
+  Target_Wheel_Omega[1] = +omega_from_x - omega_from_yaw;
+  Target_Wheel_Omega[2] = -omega_from_x - omega_from_yaw;
+  Target_Wheel_Omega[3] = -omega_from_x - omega_from_yaw;
 }
 
 /**
@@ -285,8 +287,10 @@ void Class_Chassis_FW::Output_To_Motor()
       // 底盘失能
       for (int i = 0; i < 4; i++)
       {
-
+        Motor_Wheel[i].Set_Control_Method(Motor_DJI_Control_Method_TORQUE);
+        Motor_Wheel[i].Set_Target_Omega(0.0f);
         Motor_Wheel[i].Set_Target_Torque(0.0f);
+        Motor_Wheel[i].PID_Omega.Reset(0.0f, Motor_Wheel[i].Get_Now_Omega());
       }
 
       break;
@@ -296,7 +300,8 @@ void Class_Chassis_FW::Output_To_Motor()
 
       for (int i = 0; i < 4; i++)
       {
-        Motor_Wheel[i].Set_Target_Torque(Target_Wheel_Torque[i]);
+        Motor_Wheel[i].Set_Control_Method(Motor_DJI_Control_Method_OMEGA);
+        Motor_Wheel[i].Set_Target_Omega(Target_Wheel_Omega[i]);
       }
 
       break;
