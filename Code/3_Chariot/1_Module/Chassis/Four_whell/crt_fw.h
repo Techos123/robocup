@@ -34,12 +34,6 @@ struct Struct_Chassis_Attitude_Feedback
 class Class_Chassis_FW
 {
 public:
-  // 底盘速度值PID
-  Class_PID PID_Velocity_X;
-
-  // 底盘yaw角速度PID
-  Class_PID PID_YawSpeed;
-
   // 底盘yaw角度PID（外层角度环）
   Class_PID PID_YawAngle;
 
@@ -64,6 +58,11 @@ public:
   void Set_Chassis_Yaw_Control_Type(Enum_Chassis_Yaw_Control_Type __Chassis_Yaw_Control_Type);
 
   void Init();
+  void Set_Wheel_Omega_PID(float __K_P, float __K_I, float __K_D);
+  void Set_Wheel_Omega_PID_K_P(float __K_P);
+  void Set_Wheel_Omega_PID_K_I(float __K_I);
+  void Set_Wheel_Omega_PID_K_D(float __K_D);
+  void Reset_Wheel_Omega_PID();
   void Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedback &__Feedback);
   void TIM_100ms_Alive_PeriodElapsedCallback();
   void TIM_2ms_Resolution_PeriodElapsedCallback();
@@ -78,6 +77,8 @@ protected:
   const float Wheel_Point_X = 0.100f;
   // 轮组投影点坐标y
   const float Wheel_Point_Y = 0.150f;
+  // C620最大轮端目标扭矩，对应4A电流指令
+  const float Wheel_Torque_Max = 1.2f;
 
   // 当前速度X
   float Now_Velocity_X = 0.0f;
@@ -103,11 +104,11 @@ protected:
   bool Attitude_Feedback_Valid = false;
   bool Target_Angle_Initialized = false;
 
-  // 当前航向控制器输出的z轴力矩
-  float Output_Moment_Z = 0.0f;
+  // 航向模式解算后的目标角速度
+  float Resolved_Target_Omega = 0.0f;
 
-  // 轮向电机扭矩目标值
-  float Target_Wheel_Torque[4];
+  // 轮向电机角速度目标值
+  float Target_Wheel_Omega[4] = {};
 
   // 底盘控制方法
   Enum_Chassis_Control_Type Chassis_Control_Type = Chassis_Control_Type_DISABLE;
@@ -116,9 +117,9 @@ protected:
 
   void Self_Resolution();
 
-  void Output_To_Dynamics();
+  void Resolve_Target_Omega();
 
-  void Dynamics_Inverse_Resolution();
+  void Kinematics_Inverse_Resolution();
 
   void Output_To_Motor();
 

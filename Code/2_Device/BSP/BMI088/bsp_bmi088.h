@@ -30,14 +30,47 @@
 struct Struct_BMI088_Status
 {
     // 数据传输状态
-    bool Ready_Flag;
-    bool Transfering_Flag;
-    bool Update_Flag;
+    volatile bool Ready_Flag = false;
+    volatile bool Transfering_Flag = false;
 
     // 数据传输时间戳
-    uint64_t Ready_Timestamp;
-    uint64_t Transfering_Timestamp;
-    uint64_t Update_Timestamp;
+    volatile uint64_t Ready_Timestamp = 0;
+    volatile uint64_t Transfering_Timestamp = 0;
+    volatile uint64_t Sample_Timestamp = 0;
+};
+
+struct Struct_BMI088_Sample
+{
+    Class_Matrix_f32<3, 1> Value;
+    uint64_t Timestamp = 0;
+    volatile uint32_t Sequence = 0;
+    bool Valid = false;
+};
+
+struct Struct_BMI088_Attitude_Snapshot
+{
+    Class_Matrix_f32<3, 1> Euler_Angle;
+    Class_Matrix_f32<3, 1> Gyro_Body;
+    Class_Quaternion_f32 Quaternion;
+    bool Valid = false;
+};
+
+struct Struct_BMI088_Diagnostics
+{
+    Class_Matrix_f32<3, 1> Raw_Gyro;
+    Class_Matrix_f32<3, 1> Corrected_Gyro;
+    Class_Matrix_f32<3, 1> Gyro_Bias;
+    float Last_D_T = 0.0f;
+    float Accel_Norm = 0.0f;
+    float Accel_Chi_Square_Loss = 0.0f;
+    float Temperature = 0.0f;
+    uint32_t Calibration_Progress = 0;
+    uint32_t Calibration_Target = 0;
+    uint32_t Dropped_Gyro_Samples = 0;
+    uint32_t Dropped_Accel_Samples = 0;
+    uint32_t Invalid_D_T_Count = 0;
+    bool Calibration_Finished = false;
+    bool Accel_Update_Accepted = false;
 };
 
 /**
@@ -60,7 +93,7 @@ public:
 
     inline Class_Matrix_f32<3, 1> Get_Euler_Angle() const;
 
-    inline bool Get_Attitude_Valid() const;
+    bool Get_Attitude_Valid() const;
 
     inline Class_Matrix_f32<3, 3> Get_Rotation_Matrix() const;
 
@@ -79,6 +112,10 @@ public:
     inline float Get_Accel_Chi_Square_Loss() const;
 
     inline uint64_t Get_Calculating_Time() const;
+
+    Struct_BMI088_Attitude_Snapshot Get_Attitude_Snapshot() const;
+
+    Struct_BMI088_Diagnostics Get_Diagnostics() const;
 
     void SPI_RxCpltCallback();
 
@@ -107,6 +144,13 @@ protected:
     // 加速度计卡方检验残差阈值
     float ACCEL_CHI_SQUARE_TEST_THRESHOLD = 0.5f;
 
+    // 启动静止标定参数
+    static constexpr uint32_t GYRO_CALIBRATION_SAMPLE_COUNT = 4096;
+    static constexpr float GYRO_CALIBRATION_OMEGA_THRESHOLD = 0.0872664626f;
+    static constexpr float ACCEL_NORMALIZATION_MIN_NORM = 0.001f;
+    static constexpr float CALIBRATION_ACCEL_MIN_RATIO = 0.85f;
+    static constexpr float CALIBRATION_ACCEL_MAX_RATIO = 1.15f;
+
     // 校正数据, 与温控有关, 温控在50℃
     // 加速度计仿射矩阵源数据
     const float ACCEL_AFFINE_DATA[9] = {0.9813826498493404f, 0.17232440504057203f, 0.027984325323801115f, -0.1690535919907899f, 0.9747302115792275f, -0.10336863799715153f, -0.046825636945091266f, 0.09953521655990044f, 0.986897809387138f};
@@ -127,6 +171,8 @@ protected:
     bool Hardware_Init_Finished_Flag = false;
     // EKF算法初始化状态完成标志
     bool EKF_Init_Finished_Flag = false;
+    // 启动陀螺仪零偏标定完成标志
+    bool Gyro_Calibration_Finished_Flag = false;
 
     // 加速度数据状态
     Struct_BMI088_Status Accel_Status;
@@ -135,24 +181,35 @@ protected:
     // 温度计数据状态
     Struct_BMI088_Status Temperature_Status;
 
+    // SPI完成后一次性发布的传感器样本
+    Struct_BMI088_Sample Accel_Sample;
+    Struct_BMI088_Sample Gyro_Sample;
+    uint32_t Consumed_Accel_Sequence = 0;
+    uint32_t Consumed_Gyro_Sequence = 0;
+
     // 加速度计归一化数据
     Class_Matrix_f32<3, 1> Vector_Normalized_Accel;
+    // 最近一次原始陀螺仪数据
+    Class_Matrix_f32<3, 1> Vector_Raw_Gyro;
     // 上一次陀螺仪有效数据
     Class_Matrix_f32<3, 1> Vector_Pre_Valid_Gyro;
+    // 启动标定得到的陀螺仪零偏
+    Class_Matrix_f32<3, 1> Vector_Gyro_Bias;
+    Class_Matrix_f32<3, 1> Vector_Gyro_Calibration_Sum;
+    uint32_t Gyro_Calibration_Progress = 0;
+    bool Accel_Calibration_Valid = false;
 
     // 上次有效历史数据时间戳
     uint64_t EKF_Pre_Valid_Timestamp = 0;
 
     // 时间差
     float Valid_D_T = 0.000125f;
-
-    // 四元数加速运算所用的临时数据
-    // 纯过程模型的四元数
-    static Class_Matrix_f32<4, 1> Quaternion_Tmp;
-    // 该数据的模长倒数
-    static float Modulus_Tmp;
-    // 正交化对应的Jacobi矩阵
-    static Class_Matrix_f32<4, 4> Orthogonalization_Tmp;
+    float Last_Valid_D_T = 0.0f;
+    float Accel_Norm = 0.0f;
+    bool Accel_Update_Accepted = false;
+    uint32_t Dropped_Gyro_Samples = 0;
+    uint32_t Dropped_Accel_Samples = 0;
+    uint32_t Invalid_D_T_Count = 0;
 
     // 读变量
 
@@ -210,6 +267,24 @@ protected:
     static Class_Matrix_f32<3, 3> EKF_Function_Jacobian_H_V(const Class_Matrix_f32<4, 1> &Vector_X, const float &D_T);
 
     void Accel_Chi_Square_Calculate();
+
+    bool Validate_Vector(const Class_Matrix_f32<3, 1> &Vector) const;
+
+    bool Prepare_Accel_Sample(const Struct_BMI088_Sample &Sample);
+
+    void Process_Gyro_Calibration(const Struct_BMI088_Sample &Sample);
+
+    void Initialize_EKF(uint64_t Timestamp);
+
+    bool Predict_To_Timestamp(uint64_t Timestamp, const Class_Matrix_f32<3, 1> &Gyro);
+
+    void Apply_Gyro_Sample(uint64_t Timestamp, const Class_Matrix_f32<3, 1> &Gyro);
+
+    void Update_With_Accel(uint64_t Timestamp);
+
+    void Normalize_EKF_State(bool Include_Prior);
+
+    void Publish_Output(uint64_t Now_Timestamp);
 };
 
 /* Exported variables --------------------------------------------------------*/
@@ -246,13 +321,6 @@ inline Class_Matrix_f32<3, 1> Class_BMI088::Get_Original_Gyro() const
 inline Class_Matrix_f32<3, 1> Class_BMI088::Get_Euler_Angle() const
 {
     return (Vector_Euler_Angle);
-}
-
-inline bool Class_BMI088::Get_Attitude_Valid() const
-{
-    return Hardware_Init_Finished_Flag &&
-           EKF_Init_Finished_Flag &&
-           BMI088_Gyro.Get_Valid_Flag();
 }
 
 /**

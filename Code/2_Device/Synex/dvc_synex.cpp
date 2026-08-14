@@ -183,6 +183,14 @@ uint8_t Class_Serialplot::JustFloat_Output()
         return HAL_ERROR;
     }
 
+    // DMA使用共享缓冲区，必须在写缓冲区之前确认上一帧已经结束。
+    uint32_t state = UART_Manage_Object->UART_Handler->gState;
+    if (state == HAL_UART_STATE_BUSY_TX || state == HAL_UART_STATE_BUSY_TX_RX)
+    {
+        Tx_Busy_Skip_Count++;
+        return HAL_BUSY;
+    }
+
     uint8_t *tmp_buffer = UART_Manage_Object->Tx_Buffer;
 
     // 仅清零帧长度范围，避免512字节全清（减少DMA冲突风险）
@@ -200,12 +208,7 @@ uint8_t Class_Serialplot::JustFloat_Output()
     tmp_buffer[payload_length + 2] = 0x80;
     tmp_buffer[payload_length + 3] = 0x7f;
 
-    // 3) 仅当TX真正忙(BUSY_TX / BUSY_TX_RX)时跳过，BUSY_RX是RX DMA正常状态不影响TX
-    uint32_t state = UART_Manage_Object->UART_Handler->gState;
-    if (state == HAL_UART_STATE_BUSY_TX || state == HAL_UART_STATE_BUSY_TX_RX)
-    {
-        return HAL_BUSY;
-    }
+    // 3) 启动DMA发送，BUSY_RX是接收DMA正常状态，不影响发送。
     HAL_StatusTypeDef hal_ret = HAL_UART_Transmit_DMA(UART_Manage_Object->UART_Handler, tmp_buffer, frame_length);
     return (uint8_t)hal_ret;
 }

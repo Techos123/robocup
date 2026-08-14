@@ -410,39 +410,48 @@ inline float Class_AHRS_WHEELTEC::Get_Omega_Yaw()
 /**
  * @brief 获取滚转角
  *
- * @return float 滚转角
+ * @return float 滚转角, 单位为度
  */
 inline float Class_AHRS_WHEELTEC::Get_Angle_Roll()
 {
-    float raw = Data_AHRS.Angle_Roll - Angle_Roll_Offset;
-    return roundf(raw * 1000.0f) / 1000.0f;
+    float raw_rad = Data_AHRS.Angle_Roll - Angle_Roll_Offset;
+    raw_rad = Basic_Math_Modulus_Normalization(raw_rad, 2.0f * PI);
+    const float angle_deg = raw_rad / BASIC_MATH_DEG_TO_RAD;
+    return roundf(angle_deg * 1000.0f) / 1000.0f;
 }
 
 /**
  * @brief 获取俯仰角
  *
- * @return float 俯仰角
+ * @return float 俯仰角, 单位为度
  */
 inline float Class_AHRS_WHEELTEC::Get_Angle_Pitch()
 {
-    float raw = Data_AHRS.Angle_Pitch - Angle_Pitch_Offset;
-    return roundf(raw * 1000.0f) / 1000.0f;
+    const float raw_rad = Data_AHRS.Angle_Pitch - Angle_Pitch_Offset;
+    const float angle_deg = raw_rad / BASIC_MATH_DEG_TO_RAD;
+    return roundf(angle_deg * 1000.0f) / 1000.0f;
 }
 
 /**
  * @brief 获取航向角
  *
- * @return float 航向角
+ * @return float 航向角, 单位为度, 范围为[0, 360)
  */
 inline float Class_AHRS_WHEELTEC::Get_Angle_Yaw()
 {
-    float raw = Data_AHRS.Angle_Yaw - Angle_Yaw_Offset;
+    float raw_rad = Data_AHRS.Angle_Yaw - Angle_Yaw_Offset;
 
-    // 归一化到 [-PI, PI]，防止航向角跨越边界时出现2π跳变
-    raw = Basic_Math_Modulus_Normalization(raw, 2.0f * PI);
+    // 协议字段为弧度；按N100实测方向转换为[0, 360)度。
+    raw_rad = fmodf(raw_rad, 2.0f * PI);
+    if (raw_rad < 0.0f)
+    {
+        raw_rad += 2.0f * PI;
+    }
 
-    // 舍入到0.001精度，消除微小抖动
-    return roundf(raw * 1000.0f) / 1000.0f;
+    // 舍入到0.001度，消除微小抖动
+    float angle_deg = raw_rad / BASIC_MATH_DEG_TO_RAD;
+    angle_deg = roundf(angle_deg * 1000.0f) / 1000.0f;
+    return (angle_deg >= 360.0f) ? 0.0f : angle_deg;
 }
 
 /**
