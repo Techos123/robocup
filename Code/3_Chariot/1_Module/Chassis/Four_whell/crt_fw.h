@@ -77,8 +77,8 @@ protected:
   const float Wheel_Point_X = 0.100f;
   // 轮组投影点坐标y
   const float Wheel_Point_Y = 0.150f;
-  // C620最大轮端目标扭矩，对应20A电流指令
-  const float Wheel_Torque_Max = 6.0f;
+  // C620最大轮端目标扭矩，对应4A电流指令
+  const float Wheel_Torque_Max = 1.2f;
 
   // 当前速度X
   float Now_Velocity_X = 0.0f;
