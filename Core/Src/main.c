@@ -342,7 +342,7 @@ int main(void)
 
     if (Turn_State == Turn_State_ACTIVE &&
         attitude_feedback.Valid &&
-        fabsf(yaw_error_deg) <= 1.5f &&
+        fabsf(yaw_error_deg) <= 1.0f &&
         fabsf(current_yaw_rate_rad_s) <= 0.05f &&
         fabsf(car.Get_Now_Velocity_X()) <= 0.02f)
     {
