@@ -13,6 +13,12 @@
 
 /* 私有变量 ------------------------------------------------------------------*/
 
+namespace
+{
+constexpr float Motion_Protocol_Turn_Angle_Min_Deg = -130.0f;
+constexpr float Motion_Protocol_Turn_Angle_Max_Deg = 130.0f;
+}
+
 // 当前接管USB全局回调的协议对象，初始化前为空
 Class_Motion_Protocol_USB *Class_Motion_Protocol_USB::Active_Instance = nullptr;
 
@@ -193,8 +199,8 @@ void Class_Motion_Protocol_USB::Process_Rx_Buffer()
  * @brief 校验命令专属数据格式并通知应用层
  *
  * VEL必须携带两个小端float32，共8字节；STOP的LEN必须为0；TURN必须携带
- * 一个小端float32，共4字节。所有浮点数都必须是有限值。TURN_DONE在下位机
- * 侧只允许发送，不作为有效输入命令接收。
+ * 一个[-130, 130]范围内的小端float32，共4字节。所有浮点数都必须是有限值。
+ * TURN_DONE在下位机侧只允许发送，不作为有效输入命令接收。
  */
 bool Class_Motion_Protocol_USB::Dispatch_Frame(uint8_t Command,
                                                const uint8_t *Data,
@@ -229,7 +235,9 @@ bool Class_Motion_Protocol_USB::Dispatch_Frame(uint8_t Command,
     case Motion_Protocol_Command_TURN:
     {
       if (Data_Length != 4U ||
-          !Decode_Float32_LE(Data, &motion_command.Angle_Deg))
+          !Decode_Float32_LE(Data, &motion_command.Angle_Deg) ||
+          motion_command.Angle_Deg < Motion_Protocol_Turn_Angle_Min_Deg ||
+          motion_command.Angle_Deg > Motion_Protocol_Turn_Angle_Max_Deg)
       {
         return false;
       }

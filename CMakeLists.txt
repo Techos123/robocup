@@ -25,22 +25,22 @@ set(CMAKE_PROJECT_NAME robocup)
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 # Core project settings
-project(${CMAKE_PROJECT_NAME})
+project(${CMAKE_PROJECT_NAME} LANGUAGES C CXX ASM)
 message("Build type: " ${CMAKE_BUILD_TYPE})
-
-# Enable CMake support for ASM and C languages
-enable_language(C ASM)
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
+set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS ON
+)
+
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 set_source_files_properties(
-    "${CMAKE_SOURCE_DIR}/Core/Src/main.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Core/Src/main.c"
     PROPERTIES LANGUAGE CXX
 )
 

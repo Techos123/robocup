@@ -28,14 +28,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "alg_basic.h"
-#include "bsp_bmi088.h"
 #include "bsp_power.h"
 #include "crt_fw.h"
 #include "crt_music.h"
 #include "drv_can.h"
-#include "drv_spi.h"
+#include "drv_uart.h"
 #include "drv_usb.h"
+#include "dvc_ahrs_wheeltec.h"
 #include "dvc_motion_protocol.h"
 #include "dvc_motor_dji.h"
 #include "sys_timestamp.h"
@@ -72,15 +71,14 @@ enum Enum_Turn_State
 Class_Motion_Protocol_USB ros;
 Class_Chassis_FW car;
 Class_Music music;
+Class_AHRS_WHEELTEC wt;
 float Yaw = 0.0f;
-bool BMI088_Initialized = false;
-uint32_t Last_USB_Output_Tick = 0;
 uint32_t Counter = 0;
 volatile float V = 0.0f;
-volatile float A = 0.0f;
 volatile float Angle_Deg = 0.0f;
 volatile float Target_Angle = 0.0f;
 volatile bool Turn_Flag = false;
+volatile bool Stop_Request = false;
 volatile Enum_Turn_State Turn_State = Turn_State_IDLE;
 /* USER CODE END PV */
 
@@ -93,6 +91,11 @@ void PeriphCommonClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void WT_UART_Call_Back(uint8_t *Buffer, uint16_t Length)
+{
+  wt.UART_RxCpltCallback(Buffer, Length);
+}
+
 static float Main_Get_Shortest_Yaw_Error(float target_yaw_deg,
                                          float current_yaw_deg)
 {
@@ -110,22 +113,18 @@ static float Main_Get_Shortest_Yaw_Error(float target_yaw_deg,
   return error_deg;
 }
 
-void SPI2_BMI088_Call_Back(uint8_t *Tx_Buffer, uint8_t *Rx_Buffer, uint16_t Tx_Length, uint16_t Rx_Length)
+static bool Main_Take_Stop_Request()
 {
-  (void)Tx_Buffer;
-  (void)Rx_Buffer;
-  (void)Tx_Length;
-  (void)Rx_Length;
-  BSP_BMI088.SPI_RxCpltCallback();
-}
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if (BMI088_Initialized &&
-      (GPIO_Pin == BMI088_ACCEL__INTERRUPT_Pin || GPIO_Pin == BMI088_GYRO__INTERRUPT_Pin))
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  const bool stop_requested = Stop_Request;
+  Stop_Request = false;
+  if (primask == 0U)
   {
-    BSP_BMI088.EXTI_Flag_Callback(GPIO_Pin);
+    __enable_irq();
   }
+
+  return stop_requested;
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -133,14 +132,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM5)
   {
     SYS_Timestamp.TIM_3600s_PeriodElapsedCallback();
-  }
-  else if (htim->Instance == TIM4)
-  {
-    BSP_BMI088.TIM_10us_Calculate_PeriodElapsedCallback();
-  }
-  else if (htim->Instance == TIM8)
-  {
-    BSP_BMI088.TIM_125us_Calculate_PeriodElapsedCallback();
   }
 }
 
@@ -153,6 +144,7 @@ void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
       if (!Turn_Flag)
       {
         V = Command.Linear_X;
+        // 保留现有8字节VEL协议，Angular_Z在角度闭环底盘中不参与控制。
       }
 
       break;
@@ -161,6 +153,9 @@ void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
     case (Motion_Protocol_Command_STOP):
     {
       V = 0.0f;
+      Turn_Flag = false;
+      Turn_State = Turn_State_IDLE;
+      Stop_Request = true;
 
       break;
     }
@@ -263,16 +258,13 @@ int main(void)
   SYS_Timestamp.Init(&htim5);
   HAL_TIM_Base_Start_IT(&htim5);
 
-  SPI_Init(&hspi2, SPI2_BMI088_Call_Back);
-  BMI088_Initialized = BSP_BMI088.Init();
-  if (BMI088_Initialized)
-  {
-    HAL_TIM_Base_Start_IT(&htim4);
-    HAL_TIM_Base_Start_IT(&htim8);
-  }
-  Last_USB_Output_Tick = HAL_GetTick();
+  UART_Init(&huart7, WT_UART_Call_Back, 128);
+  wt.Init(&huart7);
+  // 初始化校准完成后立即更新状态，避免首个100ms周期使用无效姿态。
+  wt.TIM_100ms_Alive_PeriodElapsedCallback();
 
   car.Init();
+  car.Set_Chassis_Yaw_Control_Type(Chassis_Yaw_Control_Type_ANGLE);
 
   CAN_Init(&hfdcan3, CAN3_Motor_Call_Back);
 
@@ -288,54 +280,36 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // const uint32_t now_tick = HAL_GetTick();
-    // if (BMI088_Initialized && (uint32_t)(now_tick - Last_USB_Output_Tick) >= 100)
-    // {
-    //   Last_USB_Output_Tick = now_tick;
-    //   const Class_Matrix_f32<3, 1> euler_angle = BSP_BMI088.Get_Euler_Angle();
-    //   Yaw = euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
-    // }
-
-    // if (!turn_active &&
-    //     attitude_feedback.Valid &&
-    //     fabsf(command.Angle_Deg) <= 180.0f)
-    // {
-    //   turn_target_yaw_deg =
-    //       attitude_feedback.Yaw_Deg + command.Angle_Deg;
-
-    //   // 可归一化到 [-180, 180]
-    //   if (turn_target_yaw_deg > 180.0f)
-    //     turn_target_yaw_deg -= 360.0f;
-    //   else if (turn_target_yaw_deg < -180.0f)
-    //     turn_target_yaw_deg += 360.0f;
-
-    //   car.Set_Target_Velocity_X(0.0f);
-    //   car.Set_Target_Omega(0.0f);
-    //   car.Set_Chassis_Yaw_Control_Type(
-    //       Chassis_Yaw_Control_Type_ANGLE);
-    //   car.Set_Target_Angle(turn_target_yaw_deg);
-
-    //   turn_active = true;
-    //   turn_stable_timing = false;
-    //   turn_done_submitted = false;
-    // }
-
-    Struct_Chassis_Attitude_Feedback attitude_feedback;
-    if (BMI088_Initialized && BSP_BMI088.Get_Attitude_Valid())
+    Struct_Chassis_Attitude_Feedback attitude_feedback{};
+    if (wt.Get_Status() == AHRS_WHEELTEC_Status_ENABLE)
     {
-      const Class_Matrix_f32<3, 1> chassis_euler_angle = BSP_BMI088.Get_Euler_Angle();
-      const Class_Matrix_f32<3, 1> chassis_gyro_body = BSP_BMI088.Get_Gyro_Body();
-      attitude_feedback.Yaw_Deg = chassis_euler_angle[0][0] / BASIC_MATH_DEG_TO_RAD;
-      attitude_feedback.Yaw_Rate_Rad_S = chassis_gyro_body[2][0];
+      Yaw = wt.Get_Angle_Yaw();
+      attitude_feedback.Yaw_Deg = Yaw;
+      attitude_feedback.Yaw_Rate_Rad_S = wt.Get_Omega_Yaw();
       attitude_feedback.Valid = true;
     }
     car.Set_Attitude_Feedback(attitude_feedback);
 
+    if (Main_Take_Stop_Request())
+    {
+      car.Set_Target_Velocity_X(0.0f);
+      if (attitude_feedback.Valid)
+      {
+        Target_Angle = attitude_feedback.Yaw_Deg;
+        car.Set_Target_Angle(Target_Angle);
+      }
+      car.Reset_Wheel_Omega_PID();
+    }
+
     const bool turn_in_progress =
         (Turn_State == Turn_State_ACTIVE) || Turn_Flag;
     car.Set_Target_Velocity_X(turn_in_progress ? 0.0f : V);
+
+    const uint32_t turn_start_primask = __get_PRIMASK();
+    __disable_irq();
     if (Turn_State == Turn_State_IDLE &&
         Turn_Flag &&
+        !Stop_Request &&
         attitude_feedback.Valid)
     {
       Target_Angle = Angle_Deg + attitude_feedback.Yaw_Deg;
@@ -351,6 +325,10 @@ int main(void)
       Turn_State = Turn_State_ACTIVE;
       Turn_Flag = false;
     }
+    if (turn_start_primask == 0U)
+    {
+      __enable_irq();
+    }
 
     if (Counter % 2 == 0)
     {
@@ -363,14 +341,24 @@ int main(void)
     float current_yaw_rate_rad_s = attitude_feedback.Yaw_Rate_Rad_S;
 
     if (Turn_State == Turn_State_ACTIVE &&
-        fabsf(yaw_error_deg) <= 2.0f &&
+        attitude_feedback.Valid &&
+        fabsf(yaw_error_deg) <= 1.5f &&
         fabsf(current_yaw_rate_rad_s) <= 0.05f &&
         fabsf(car.Get_Now_Velocity_X()) <= 0.02f)
     {
-      const uint8_t status = ros.Send_Turn_Done();
-      if (status == USBD_OK)
+      const uint32_t turn_done_primask = __get_PRIMASK();
+      __disable_irq();
+      if (Turn_State == Turn_State_ACTIVE && !Stop_Request)
       {
-        Turn_State = Turn_State_IDLE;
+        const uint8_t status = ros.Send_Turn_Done();
+        if (status == USBD_OK)
+        {
+          Turn_State = Turn_State_IDLE;
+        }
+      }
+      if (turn_done_primask == 0U)
+      {
+        __enable_irq();
       }
     }
     // 通信设备回调数据
@@ -380,6 +368,7 @@ int main(void)
     if (Counter >= 100)
     {
       Counter = 0;
+      wt.TIM_100ms_Alive_PeriodElapsedCallback();
       car.TIM_100ms_Alive_PeriodElapsedCallback();
     }
 
