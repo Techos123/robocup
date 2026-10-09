@@ -260,7 +260,7 @@ int main(void)
 
   UART_Init(&huart7, WT_UART_Call_Back, 128);
   wt.Init(&huart7);
-  // 初始化校准完成后立即更新状态，避免首个100ms周期使用无效姿态。
+  // 初始化等待结束后立即更新状态，避免首个100ms周期使用无效姿态。
   wt.TIM_100ms_Alive_PeriodElapsedCallback();
 
   car.Init();

@@ -160,7 +160,6 @@ public:
     void UART_RxCpltCallback(uint8_t *Rx_Data, uint16_t Length);
 
     void TIM_100ms_Alive_PeriodElapsedCallback();
-    void Calibrate_AHRS_Offset(); // 静止时采集100次数据计算角速度和角度的零偏
 
 protected:
     // 初始化相关常量
@@ -201,20 +200,12 @@ protected:
     // 写变量
 
     // 读写变量
-    // 零漂校准
+    // 角速度滤波
     static constexpr float OMEGA_EMA_ALPHA = 0.2f; // 角速度EMA滤波系数
 
-    float Omega_Roll_Offset = 0.0f;    // Roll角速度零偏值
-    float Omega_Pitch_Offset = 0.0f;   // Pitch角速度零偏值
-    float Omega_Yaw_Offset = 0.0f;     // Yaw角速度零偏值
     float Omega_Roll_Filtered = 0.0f;  // Roll角速度EMA滤波值
     float Omega_Pitch_Filtered = 0.0f; // Pitch角速度EMA滤波值
     float Omega_Yaw_Filtered = 0.0f;   // Yaw角速度EMA滤波值
-    float Angle_Roll_Offset = 0.0f;    // Roll角度零偏值
-    float Angle_Pitch_Offset = 0.0f;   // Pitch角度零偏值
-    float Angle_Yaw_Offset = 0.0f;     // Yaw角度零偏值
-
-    uint8_t Is_Calibrated = 0; // 校准完成标志
 
     // 内部函数
 
@@ -378,7 +369,7 @@ inline uint64_t Class_AHRS_WHEELTEC::Get_Timestamp()
  */
 inline float Class_AHRS_WHEELTEC::Get_Omega_Roll()
 {
-    float raw = Data_AHRS.Omega_Roll - Omega_Roll_Offset;
+    float raw = Data_AHRS.Omega_Roll;
     Omega_Roll_Filtered = OMEGA_EMA_ALPHA * raw + (1.0f - OMEGA_EMA_ALPHA) * Omega_Roll_Filtered;
     return roundf(Omega_Roll_Filtered * 1000.0f) / 1000.0f;
 }
@@ -390,7 +381,7 @@ inline float Class_AHRS_WHEELTEC::Get_Omega_Roll()
  */
 inline float Class_AHRS_WHEELTEC::Get_Omega_Pitch()
 {
-    float raw = Data_AHRS.Omega_Pitch - Omega_Pitch_Offset;
+    float raw = Data_AHRS.Omega_Pitch;
     Omega_Pitch_Filtered = OMEGA_EMA_ALPHA * raw + (1.0f - OMEGA_EMA_ALPHA) * Omega_Pitch_Filtered;
     return roundf(Omega_Pitch_Filtered * 1000.0f) / 1000.0f;
 }
@@ -402,7 +393,7 @@ inline float Class_AHRS_WHEELTEC::Get_Omega_Pitch()
  */
 inline float Class_AHRS_WHEELTEC::Get_Omega_Yaw()
 {
-    float raw = Data_AHRS.Omega_Yaw - Omega_Yaw_Offset;
+    float raw = Data_AHRS.Omega_Yaw;
     Omega_Yaw_Filtered = OMEGA_EMA_ALPHA * raw + (1.0f - OMEGA_EMA_ALPHA) * Omega_Yaw_Filtered;
     return roundf(Omega_Yaw_Filtered * 1000.0f) / 1000.0f;
 }
@@ -414,9 +405,9 @@ inline float Class_AHRS_WHEELTEC::Get_Omega_Yaw()
  */
 inline float Class_AHRS_WHEELTEC::Get_Angle_Roll()
 {
-    float raw_rad = Data_AHRS.Angle_Roll - Angle_Roll_Offset;
-    raw_rad = Basic_Math_Modulus_Normalization(raw_rad, 2.0f * PI);
-    const float angle_deg = raw_rad / BASIC_MATH_DEG_TO_RAD;
+    // N100原始欧拉角单位为弧度，先转换为度。
+    float angle_deg = Data_AHRS.Angle_Roll / BASIC_MATH_DEG_TO_RAD;
+    angle_deg = Basic_Math_Modulus_Normalization(angle_deg, 360.0f);
     return roundf(angle_deg * 1000.0f) / 1000.0f;
 }
 
@@ -427,8 +418,8 @@ inline float Class_AHRS_WHEELTEC::Get_Angle_Roll()
  */
 inline float Class_AHRS_WHEELTEC::Get_Angle_Pitch()
 {
-    const float raw_rad = Data_AHRS.Angle_Pitch - Angle_Pitch_Offset;
-    const float angle_deg = raw_rad / BASIC_MATH_DEG_TO_RAD;
+    // N100原始欧拉角单位为弧度，先转换为度。
+    const float angle_deg = Data_AHRS.Angle_Pitch / BASIC_MATH_DEG_TO_RAD;
     return roundf(angle_deg * 1000.0f) / 1000.0f;
 }
 
@@ -439,19 +430,16 @@ inline float Class_AHRS_WHEELTEC::Get_Angle_Pitch()
  */
 inline float Class_AHRS_WHEELTEC::Get_Angle_Yaw()
 {
-    float raw_rad = Data_AHRS.Angle_Yaw - Angle_Yaw_Offset;
-
-    // 协议字段为弧度；按N100实测方向转换为[0, 360)度。
-    raw_rad = fmodf(raw_rad, 2.0f * PI);
-    if (raw_rad < 0.0f)
+    // N100原始欧拉角单位为弧度，先转换为度，再归一化到[0, 360)。
+    float angle_deg = Data_AHRS.Angle_Yaw / BASIC_MATH_DEG_TO_RAD;
+    angle_deg = fmodf(angle_deg, 360.0f);
+    if (angle_deg < 0.0f)
     {
-        raw_rad += 2.0f * PI;
+        angle_deg += 360.0f;
     }
 
-    // 舍入到0.001度，消除微小抖动
-    float angle_deg = raw_rad / BASIC_MATH_DEG_TO_RAD;
-    angle_deg = roundf(angle_deg * 1000.0f) / 1000.0f;
-    return (angle_deg >= 360.0f) ? 0.0f : angle_deg;
+    // 修正浮点边界产生的360度，并统一正负零。
+    return (angle_deg >= 360.0f || angle_deg == 0.0f) ? 0.0f : angle_deg;
 }
 
 /**
