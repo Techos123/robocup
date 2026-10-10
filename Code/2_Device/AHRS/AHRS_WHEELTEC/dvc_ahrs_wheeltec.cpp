@@ -601,6 +601,23 @@ void Class_AHRS_WHEELTEC::Init(UART_HandleTypeDef *huart, uint8_t __Frame_Header
 
   // 数据已到达，再等待AHRS内部融合稳定；HAL_Delay(200)实际为201ms。
   HAL_Delay(200);
+
+  // 隔离验证：恢复旧版校准中的100次新帧等待，不计算或扣除零偏。
+  const uint8_t wait_count = 100U;
+  for (uint8_t i = 0U; i < wait_count; i++)
+  {
+    const uint32_t prev_flag = Flag;
+    const uint32_t timeout_tick = HAL_GetTick();
+    while (Flag == prev_flag)
+    {
+      if (HAL_GetTick() - timeout_tick > 50U)
+      {
+        // 与旧版一致：本次等待超时后继续下一次，避免无限阻塞。
+        break;
+      }
+      HAL_Delay(1); // 实际轮询间隔为2ms。
+    }
+  }
 }
 
 /**
