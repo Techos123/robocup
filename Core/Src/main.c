@@ -46,6 +46,13 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+enum Enum_Start_State
+{
+  Start_State_WAITING = 0,
+  Start_State_PENDING,
+  Start_State_COMPLETE,
+};
+
 enum Enum_Turn_State
 {
   Turn_State_IDLE = 0,
@@ -79,6 +86,8 @@ volatile float Angle_Deg = 0.0f;
 volatile float Target_Angle = 0.0f;
 volatile bool Turn_Flag = false;
 volatile bool Stop_Request = false;
+// 每次上电只允许WAITING -> PENDING -> COMPLETE，STOP不改变启动状态。
+volatile Enum_Start_State Start_State = Start_State_WAITING;
 volatile Enum_Turn_State Turn_State = Turn_State_IDLE;
 /* USER CODE END PV */
 
@@ -139,9 +148,20 @@ void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
 {
   switch (Command.Command)
   {
+    case (Motion_Protocol_Command_START):
+    {
+      if (Start_State == Start_State_WAITING)
+      {
+        // USB回调只记录请求；主循环取得有效yaw后才设置目标角并使能。
+        Start_State = Start_State_PENDING;
+      }
+      break;
+    }
+
     case (Motion_Protocol_Command_VEL):
     {
-      if (!Turn_Flag)
+      // PENDING也接收后续命令，避免START与VEL粘包时丢失速度指令。
+      if (Start_State != Start_State_WAITING && !Turn_Flag)
       {
         V = Command.Linear_X;
         // 保留现有8字节VEL协议，Angular_Z在角度闭环底盘中不参与控制。
@@ -152,6 +172,7 @@ void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
 
     case (Motion_Protocol_Command_STOP):
     {
+      // STOP仅停止运动，既不取消待处理START，也不清除已启动状态。
       V = 0.0f;
       Turn_Flag = false;
       Turn_State = Turn_State_IDLE;
@@ -162,7 +183,8 @@ void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
 
     case (Motion_Protocol_Command_TURN):
     {
-      if (Turn_State == Turn_State_IDLE && !Turn_Flag)
+      if (Start_State != Start_State_WAITING &&
+          Turn_State == Turn_State_IDLE && !Turn_Flag)
       {
         Angle_Deg = Command.Angle_Deg; // Command.Angle_Deg：相对当前方向，逆时针为正
         V = 0.0f;
@@ -272,7 +294,8 @@ int main(void)
 
   music.Play_Startup();
 
-  car.Set_Chassis_Control_Type(Chassis_Control_Type_NORMAL);
+  // 初始化完成后保持失能，等待本次上电唯一一次START。
+  car.Set_Chassis_Control_Type(Chassis_Control_Type_DISABLE);
 
   /* USER CODE END 2 */
 
@@ -286,9 +309,23 @@ int main(void)
       Yaw = wt.Get_Angle_Yaw();
       attitude_feedback.Yaw_Deg = Yaw;
       attitude_feedback.Yaw_Rate_Rad_S = wt.Get_Omega_Yaw();
-      attitude_feedback.Valid = true;
+      attitude_feedback.Valid =
+          !Basic_Math_Is_Invalid_Float(attitude_feedback.Yaw_Deg) &&
+          !Basic_Math_Is_Invalid_Float(attitude_feedback.Yaw_Rate_Rad_S);
     }
     car.Set_Attitude_Feedback(attitude_feedback);
+
+    if (Start_State == Start_State_PENDING && attitude_feedback.Valid)
+    {
+      // 必须先同步当前yaw（角度制），再使能；无有效姿态时保留请求。
+      Target_Angle = attitude_feedback.Yaw_Deg;
+      car.Set_Target_Angle(Target_Angle);
+      car.Set_Target_Velocity_X(0.0f);
+      car.Reset_Wheel_Omega_PID();
+      car.Set_Chassis_Control_Type(Chassis_Control_Type_NORMAL);
+      Start_State = Start_State_COMPLETE;
+      // 不清除V/Turn_Flag，保留START之后按接收顺序保存的运动命令。
+    }
 
     if (Main_Take_Stop_Request())
     {
@@ -303,11 +340,13 @@ int main(void)
 
     const bool turn_in_progress =
         (Turn_State == Turn_State_ACTIVE) || Turn_Flag;
-    car.Set_Target_Velocity_X(turn_in_progress ? 0.0f : V);
+    car.Set_Target_Velocity_X(
+        (Start_State != Start_State_COMPLETE || turn_in_progress) ? 0.0f : V);
 
     const uint32_t turn_start_primask = __get_PRIMASK();
     __disable_irq();
-    if (Turn_State == Turn_State_IDLE &&
+    if (Start_State == Start_State_COMPLETE &&
+        Turn_State == Turn_State_IDLE &&
         Turn_Flag &&
         !Stop_Request &&
         attitude_feedback.Valid)

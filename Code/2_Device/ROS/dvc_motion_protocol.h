@@ -1,8 +1,8 @@
 /**
  * @file dvc_motion_protocol.h
  * @brief 基于USB CDC虚拟串口的X5运动控制二进制协议封装
- * @version 2.0
- * @date 2026-08-11
+ * @version 2.1
+ * @date 2026-10-11
  */
 
 #ifndef DVC_MOTION_PROTOCOL_H
@@ -34,7 +34,7 @@
  * @brief 运动协议命令字
  *
  * 命令方向严格遵循MOTION_PROTOCOL.md：
- * - VEL、STOP和TURN由X5发送给运动下位机；
+ * - VEL、STOP、TURN和START由X5发送给运动下位机；
  * - TURN_DONE由运动下位机发送给X5；
  * - NONE只表示本地对象尚未保存有效命令，不会在线上传输。
  */
@@ -44,6 +44,7 @@ enum Enum_Motion_Protocol_Command : uint8_t
   Motion_Protocol_Command_VEL = 0x01U,
   Motion_Protocol_Command_STOP = 0x02U,
   Motion_Protocol_Command_TURN = 0x03U,
+  Motion_Protocol_Command_START = 0x04U,
   Motion_Protocol_Command_TURN_DONE = 0x83U,
 };
 
@@ -53,7 +54,7 @@ enum Enum_Motion_Protocol_Command : uint8_t
  * 只有与Command对应的数据字段才有意义：
  * - VEL：Linear_X为底盘x轴线速度，单位m/s，向前为正；
  *   Angular_Z为底盘z轴角速度，单位rad/s，逆时针为正；
- * - STOP：没有DATA，三个浮点字段均保持为0；
+ * - STOP、START：没有DATA，三个浮点字段均保持为0；
  * - TURN：Angle_Deg为相对当前车身方向的目标转角，单位deg，
  *   逆时针左转为正、顺时针右转为负，有效范围为[-130, 130]。
  *
@@ -96,7 +97,7 @@ typedef void (*Motion_Protocol_Command_Callback)(
     const Struct_Motion_Protocol_Command &Command);
 
 /**
- * @brief 基于现有USB CDC驱动的运动协议V2.0收发类
+ * @brief 基于现有USB CDC驱动的运动协议V2.1收发类
  *
  * USB CDC向上层提供连续字节流，单次USB接收并不保证恰好对应一帧。本类使用
  * 固定长度缓冲区保存未处理字节，支持以下情况：
@@ -114,7 +115,7 @@ public:
   /**
    * @brief 初始化协议状态并注册USB接收回调
    *
-   * @param Callback_Function 有效VEL、STOP或TURN命令的应用层回调；
+   * @param Callback_Function 有效VEL、STOP、TURN或START命令的应用层回调；
    *        允许传入nullptr，此时仍会解析并统计帧，但不会向应用层分发命令。
    *
    * @note 必须在MX_USB_DEVICE_Init()之后调用。重复调用会清空未完成帧和统计

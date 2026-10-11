@@ -1,8 +1,8 @@
 /**
  * @file dvc_motion_protocol.cpp
  * @brief 基于USB CDC虚拟串口的X5运动控制二进制协议实现
- * @version 2.0
- * @date 2026-08-11
+ * @version 2.1
+ * @date 2026-10-11
  */
 
 /* 包含文件 ------------------------------------------------------------------*/
@@ -30,7 +30,7 @@ static_assert(sizeof(float) == 4U,
 /**
  * @brief 初始化协议解析状态并向底层USB驱动注册接收适配函数
  *
- * @param Callback_Function 每收到一条合法VEL、STOP或TURN帧时调用的回调
+ * @param Callback_Function 每收到一条合法VEL、STOP、TURN或START帧时调用的回调
  *
  * 初始化会丢弃上一次遗留的半帧，并将三个统计计数器清零。USB_Init()只负责
  * 挂接现有USB CDC驱动，不会重新初始化USB外设，因此本函数必须在
@@ -198,7 +198,7 @@ void Class_Motion_Protocol_USB::Process_Rx_Buffer()
 /**
  * @brief 校验命令专属数据格式并通知应用层
  *
- * VEL必须携带两个小端float32，共8字节；STOP的LEN必须为0；TURN必须携带
+ * VEL必须携带两个小端float32，共8字节；STOP和START的LEN必须为0；TURN必须携带
  * 一个[-130, 130]范围内的小端float32，共4字节。所有浮点数都必须是有限值。
  * TURN_DONE在下位机侧只允许发送，不作为有效输入命令接收。
  */
@@ -245,9 +245,19 @@ bool Class_Motion_Protocol_USB::Dispatch_Frame(uint8_t Command,
       motion_command.Command = Motion_Protocol_Command_TURN;
       break;
     }
+    case Motion_Protocol_Command_START:
+    {
+      if (Data_Length != 0U)
+      {
+        return false;
+      }
+
+      motion_command.Command = Motion_Protocol_Command_START;
+      break;
+    }
     default:
     {
-      // TURN_DONE在运动下位机侧仅用于发送，其余命令字未在V2.0协议中定义。
+      // TURN_DONE在运动下位机侧仅用于发送，其余命令字未在V2.1协议中定义。
       return false;
     }
   }
