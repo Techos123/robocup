@@ -23,7 +23,7 @@ void Class_Chassis_FW::Init()
   Chassis_Yaw_Control_Type = Chassis_Yaw_Control_Type_OMEGA;
 
   // 底盘yaw角度PID, 输出角速度
-  PID_YawAngle.Init(0.38f, 0.0040f, 0.0011f, 0.0f, 1.5f, 3.0f, 0.002f, 0.01f);
+  PID_YawAngle.Init(0.38f, 0.0040f, 0.0011f, 0.0f, 0.5f, 1.2f, 0.002f, 0.01f);
   PID_YawAngle.Reset();
 
   // 电机初始化
@@ -35,7 +35,7 @@ void Class_Chassis_FW::Init()
   for (int i = 0; i < 4; i++)
   {
     Target_Wheel_Omega[i] = 0.0f;
-    Motor_Wheel[i].PID_Omega.Init(0.41f, 0.15f, 0.0f, 0.0f,
+    Motor_Wheel[i].PID_Omega.Init(0.38f, 0.1f, 0.0f, 0.0f,
                                   Wheel_Torque_Max, Wheel_Torque_Max, 0.002f);
     Motor_Wheel[i].PID_Omega.Reset();
   }
