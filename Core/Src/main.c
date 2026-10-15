@@ -86,7 +86,8 @@ volatile float Angle_Deg = 0.0f;
 volatile float Target_Angle = 0.0f;
 volatile bool Turn_Flag = false;
 volatile bool Stop_Request = false;
-// 每次上电只允许WAITING -> PENDING -> COMPLETE，STOP不改变启动状态。
+volatile bool PID_Reset_Request = false;
+// 首次START推进启动状态，后续START只请求重置PID；STOP不改变启动状态。
 volatile Enum_Start_State Start_State = Start_State_WAITING;
 volatile Enum_Turn_State Turn_State = Turn_State_IDLE;
 /* USER CODE END PV */
@@ -136,6 +137,20 @@ static bool Main_Take_Stop_Request()
   return stop_requested;
 }
 
+static bool Main_Take_PID_Reset_Request()
+{
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  const bool reset_requested = PID_Reset_Request;
+  PID_Reset_Request = false;
+  if (primask == 0U)
+  {
+    __enable_irq();
+  }
+
+  return reset_requested;
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM5)
@@ -154,6 +169,11 @@ void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
       {
         // USB回调只记录请求；主循环取得有效yaw后才设置目标角并使能。
         Start_State = Start_State_PENDING;
+      }
+      else
+      {
+        // 待启动和已启动期间均接受重置，不改变航向目标或运动请求。
+        PID_Reset_Request = true;
       }
       break;
     }
@@ -294,7 +314,7 @@ int main(void)
 
   music.Play_Startup();
 
-  // 初始化完成后保持失能，等待本次上电唯一一次START。
+  // 初始化完成后保持失能，等待本次上电的首次START。
   car.Set_Chassis_Control_Type(Chassis_Control_Type_DISABLE);
 
   /* USER CODE END 2 */
@@ -369,10 +389,20 @@ int main(void)
       __enable_irq();
     }
 
+    const bool pid_reset_requested = Main_Take_PID_Reset_Request();
+    if (pid_reset_requested)
+    {
+      car.Reset_Control_PID();
+    }
+
     if (Counter % 2 == 0)
     {
       car.TIM_2ms_Resolution_PeriodElapsedCallback();
-      car.TIM_2ms_Control_PeriodElapsedCallback();
+      // 重置轮保留零输出供本轮CAN发送，后续控制周期沿原目标重新计算。
+      if (!pid_reset_requested)
+      {
+        car.TIM_2ms_Control_PeriodElapsedCallback();
+      }
     }
 
     float yaw_error_deg =

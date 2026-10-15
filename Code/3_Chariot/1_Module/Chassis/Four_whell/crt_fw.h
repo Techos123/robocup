@@ -63,6 +63,9 @@ public:
   void Set_Wheel_Omega_PID_K_I(float __K_I);
   void Set_Wheel_Omega_PID_K_D(float __K_D);
   void Reset_Wheel_Omega_PID();
+  // 清零航向/轮速PID及电机发送输出，保留航向和速度目标。
+  // 调用后本轮应跳过常规控制计算，避免覆盖待发送的零输出。
+  void Reset_Control_PID();
   void Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedback &__Feedback);
   void TIM_100ms_Alive_PeriodElapsedCallback();
   void TIM_2ms_Resolution_PeriodElapsedCallback();

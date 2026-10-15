@@ -83,6 +83,28 @@ void Class_Chassis_FW::Reset_Wheel_Omega_PID()
   }
 }
 
+void Class_Chassis_FW::Reset_Control_PID()
+{
+  PID_YawAngle.Reset();
+  Resolved_Target_Omega = 0.0f;
+
+  for (int i = 0; i < 4; i++)
+  {
+    // 无参数Reset同时清零输出、积分和历史误差，不以实际轮速预置误差。
+    Motor_Wheel[i].PID_Omega.Reset();
+
+    // 临时通过力矩模式更新电机输出及CAN缓存，避免重新计算轮速PID。
+    const Enum_Motor_DJI_Control_Method control_method =
+        Motor_Wheel[i].Get_Control_Method();
+    Motor_Wheel[i].Set_Control_Method(Motor_DJI_Control_Method_TORQUE);
+    Motor_Wheel[i].Set_Target_Torque(0.0f);
+    Motor_Wheel[i].Set_Feedforward_Torque(0.0f);
+    Motor_Wheel[i].Set_Feedforward_Omega(0.0f);
+    Motor_Wheel[i].TIM_Calculate_PeriodElapsedCallback();
+    Motor_Wheel[i].Set_Control_Method(control_method);
+  }
+}
+
 void Class_Chassis_FW::Set_Attitude_Feedback(const Struct_Chassis_Attitude_Feedback &__Feedback)
 {
   if (!__Feedback.Valid ||
