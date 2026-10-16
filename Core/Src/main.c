@@ -278,7 +278,7 @@ void ROS_Call_Back(const Struct_Motion_Protocol_Command &Command)
 
     case (Motion_Protocol_Command_STOP):
     {
-      // STOP仅停止运动，既不取消待处理START，也不清除已启动状态。
+      // STOP清零平移并取消转向状态；保留原航向目标和启动状态。
       V = 0.0f;
       Turn_Flag = false;
       Turn_State = Turn_State_IDLE;
@@ -436,11 +436,7 @@ int main(void)
     if (stop_requested)
     {
       car.Set_Target_Velocity_X(0.0f);
-      if (attitude_feedback.Valid)
-      {
-        Target_Angle = attitude_feedback.Yaw_Deg;
-        car.Set_Target_Angle(Target_Angle);
-      }
+      // 停止平移后角度环继续保持原目标，不以停车瞬间的yaw重锁。
       car.Reset_Wheel_Omega_PID();
     }
 
