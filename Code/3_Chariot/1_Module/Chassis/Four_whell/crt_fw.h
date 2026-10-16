@@ -49,6 +49,7 @@ public:
 
   inline float Get_Target_Velocity_X();
   inline float Get_Target_Omega();
+  inline float Get_Target_Angle() const;
 
   inline void Set_Target_Velocity_X(float __Target_Velocity_X);
   inline void Set_Target_Omega(float __Target_Omega);
@@ -206,6 +207,11 @@ inline float Class_Chassis_FW::Get_Target_Velocity_X()
 inline float Class_Chassis_FW::Get_Target_Omega()
 {
   return (Target_Omega);
+}
+
+inline float Class_Chassis_FW::Get_Target_Angle() const
+{
+  return (Target_Angle);
 }
 
 /**

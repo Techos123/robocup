@@ -98,6 +98,15 @@ struct Struct_AHRS_WHEELTEC_Data_AHRS
     uint8_t Frame_Rear;
 } __attribute__((packed));
 
+// 主循环使用的同帧航向快照；Frame_Count仅在收到有效AHRS帧时递增。
+struct Struct_AHRS_WHEELTEC_Yaw_Snapshot
+{
+    float Yaw_Deg = 0.0f;
+    float Yaw_Rate_Rad_S = 0.0f;
+    uint32_t Frame_Count = 0U;
+    bool Valid = false;
+};
+
 /* Exported variables --------------------------------------------------------*/
 
 /**
@@ -148,6 +157,8 @@ public:
     inline float Get_Angle_Pitch();
 
     inline float Get_Angle_Yaw();
+
+    inline Struct_AHRS_WHEELTEC_Yaw_Snapshot Get_Yaw_Snapshot();
 
     inline float Get_Q_0();
 
@@ -440,6 +451,47 @@ inline float Class_AHRS_WHEELTEC::Get_Angle_Yaw()
 
     // 修正浮点边界产生的360度，并统一正负零。
     return (angle_deg >= 360.0f || angle_deg == 0.0f) ? 0.0f : angle_deg;
+}
+
+/**
+ * @brief 主循环一次读取同帧yaw、角速度和帧计数，避免UART中断混入下一帧。
+ */
+inline Struct_AHRS_WHEELTEC_Yaw_Snapshot Class_AHRS_WHEELTEC::Get_Yaw_Snapshot()
+{
+    Struct_AHRS_WHEELTEC_Yaw_Snapshot snapshot{};
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const Enum_AHRS_WHEELTEC_Status status = WHEELTEC_AHRS_Status;
+    const float raw_yaw = Data_AHRS.Angle_Yaw;
+    const float raw_yaw_rate = Data_AHRS.Omega_Yaw;
+    snapshot.Frame_Count = Flag;
+    if (primask == 0U)
+    {
+        __enable_irq();
+    }
+
+    // 临界区只复制数据，转换和滤波均在恢复中断后进行。
+    if (status != AHRS_WHEELTEC_Status_ENABLE ||
+        Basic_Math_Is_Invalid_Float(raw_yaw) ||
+        Basic_Math_Is_Invalid_Float(raw_yaw_rate))
+    {
+        return snapshot;
+    }
+
+    float angle_deg = fmodf(raw_yaw / BASIC_MATH_DEG_TO_RAD, 360.0f);
+    if (angle_deg < 0.0f)
+    {
+        angle_deg += 360.0f;
+    }
+    snapshot.Yaw_Deg = (angle_deg >= 360.0f || angle_deg == 0.0f) ? 0.0f : angle_deg;
+
+    // 保持原Get_Omega_Yaw每次主循环读取时更新EMA的行为。
+    Omega_Yaw_Filtered = OMEGA_EMA_ALPHA * raw_yaw_rate +
+                         (1.0f - OMEGA_EMA_ALPHA) * Omega_Yaw_Filtered;
+    snapshot.Yaw_Rate_Rad_S = roundf(Omega_Yaw_Filtered * 1000.0f) / 1000.0f;
+    snapshot.Valid = !Basic_Math_Is_Invalid_Float(snapshot.Yaw_Deg) &&
+                     !Basic_Math_Is_Invalid_Float(snapshot.Yaw_Rate_Rad_S);
+    return snapshot;
 }
 
 /**

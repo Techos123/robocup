@@ -64,6 +64,9 @@ enum Enum_Turn_State
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+static constexpr float YAW_JUMP_THRESHOLD_DEG = 3.0f;
+static constexpr uint32_t YAW_JUMP_MAX_SAMPLE_INTERVAL_MS = 20U;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -90,6 +93,9 @@ volatile bool PID_Reset_Request = false;
 // 首次START推进启动状态，后续START只请求重置PID；STOP不改变启动状态。
 volatile Enum_Start_State Start_State = Start_State_WAITING;
 volatile Enum_Turn_State Turn_State = Turn_State_IDLE;
+// 仅用于调试观察直行时的yaw突变补偿。
+volatile uint32_t Yaw_Jump_Compensation_Count = 0U;
+volatile float Last_Yaw_Jump_Deg = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -121,6 +127,86 @@ static float Main_Get_Shortest_Yaw_Error(float target_yaw_deg,
   }
 
   return error_deg;
+}
+
+// 调用方在短临界区内检查命令状态，避免与USB回调交错读取。
+static bool Main_Is_Straight_Motion()
+{
+  return Start_State == Start_State_COMPLETE &&
+         Turn_State == Turn_State_IDLE && !Turn_Flag && !Stop_Request &&
+         V != 0.0f && car.Get_Target_Velocity_X() != 0.0f &&
+         car.Get_Chassis_Control_Type() == Chassis_Control_Type_NORMAL &&
+         car.Get_Chassis_Yaw_Control_Type() == Chassis_Yaw_Control_Type_ANGLE;
+}
+
+static void Main_Compensate_Straight_Yaw_Jump(
+    const Struct_AHRS_WHEELTEC_Yaw_Snapshot &snapshot, bool stop_requested)
+{
+  static bool baseline_valid = false;
+  static float previous_yaw_deg = 0.0f;
+  static uint32_t previous_frame_count = 0U;
+  static uint32_t previous_sample_tick = 0U;
+
+  const uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  const bool straight_motion = Main_Is_Straight_Motion();
+  if (primask == 0U)
+  {
+    __enable_irq();
+  }
+
+  // 停车、转向、无效反馈都立即清基准；重新直行后等待新帧。
+  if (stop_requested || !snapshot.Valid || !straight_motion)
+  {
+    baseline_valid = false;
+    previous_frame_count = snapshot.Frame_Count;
+    return;
+  }
+  if (snapshot.Frame_Count == previous_frame_count)
+  {
+    return;
+  }
+
+  const uint32_t sample_tick = HAL_GetTick();
+  if (baseline_valid &&
+      sample_tick - previous_sample_tick <= YAW_JUMP_MAX_SAMPLE_INTERVAL_MS)
+  {
+    // 最短角增量：359->1是+2度，不应被识别为-358度突变。
+    const float delta_yaw_deg =
+        Main_Get_Shortest_Yaw_Error(snapshot.Yaw_Deg, previous_yaw_deg);
+    if (fabsf(delta_yaw_deg) > YAW_JUMP_THRESHOLD_DEG)
+    {
+      // 同向平移实际目标，使current-target误差连续；无需重置PID。
+      const float compensated_target = Main_Get_Shortest_Yaw_Error(
+          car.Get_Target_Angle() + delta_yaw_deg, 0.0f);
+      const uint32_t apply_primask = __get_PRIMASK();
+      __disable_irq();
+      const bool still_straight = Main_Is_Straight_Motion();
+      if (still_straight)
+      {
+        Target_Angle = compensated_target;
+        car.Set_Target_Angle(compensated_target);
+        Last_Yaw_Jump_Deg = delta_yaw_deg;
+        Yaw_Jump_Compensation_Count++;
+      }
+      if (apply_primask == 0U)
+      {
+        __enable_irq();
+      }
+      if (!still_straight)
+      {
+        baseline_valid = false;
+        previous_frame_count = snapshot.Frame_Count;
+        return;
+      }
+    }
+  }
+
+  // 首帧或间隔过大的新帧只建立基准；同一帧重复读取不更新时间。
+  previous_yaw_deg = snapshot.Yaw_Deg;
+  previous_frame_count = snapshot.Frame_Count;
+  previous_sample_tick = sample_tick;
+  baseline_valid = true;
 }
 
 static bool Main_Take_Stop_Request()
@@ -323,15 +409,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    const Struct_AHRS_WHEELTEC_Yaw_Snapshot yaw_snapshot = wt.Get_Yaw_Snapshot();
     Struct_Chassis_Attitude_Feedback attitude_feedback{};
-    if (wt.Get_Status() == AHRS_WHEELTEC_Status_ENABLE)
+    if (yaw_snapshot.Valid)
     {
-      Yaw = wt.Get_Angle_Yaw();
+      Yaw = yaw_snapshot.Yaw_Deg;
       attitude_feedback.Yaw_Deg = Yaw;
-      attitude_feedback.Yaw_Rate_Rad_S = wt.Get_Omega_Yaw();
-      attitude_feedback.Valid =
-          !Basic_Math_Is_Invalid_Float(attitude_feedback.Yaw_Deg) &&
-          !Basic_Math_Is_Invalid_Float(attitude_feedback.Yaw_Rate_Rad_S);
+      attitude_feedback.Yaw_Rate_Rad_S = yaw_snapshot.Yaw_Rate_Rad_S;
+      attitude_feedback.Valid = true;
     }
     car.Set_Attitude_Feedback(attitude_feedback);
 
@@ -347,7 +432,8 @@ int main(void)
       // 不清除V/Turn_Flag，保留START之后按接收顺序保存的运动命令。
     }
 
-    if (Main_Take_Stop_Request())
+    const bool stop_requested = Main_Take_Stop_Request();
+    if (stop_requested)
     {
       car.Set_Target_Velocity_X(0.0f);
       if (attitude_feedback.Valid)
@@ -388,6 +474,9 @@ int main(void)
     {
       __enable_irq();
     }
+
+    // 本轮运动状态已更新，在航向PID计算前抵消直行时的新帧角度突变。
+    Main_Compensate_Straight_Yaw_Jump(yaw_snapshot, stop_requested);
 
     const bool pid_reset_requested = Main_Take_PID_Reset_Request();
     if (pid_reset_requested)
