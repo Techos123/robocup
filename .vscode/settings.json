@@ -15,7 +15,7 @@
     "VsCodeTaskButtons.showCounter": false,
     "VsCodeTaskButtons.tasks": [
         {
-            "label": "DAPLink 烧录",
+            "label": "烧录",
             "task": "STM32: OpenOCD: Flash project (DAPLink)",
             "alignment": "left",
             "tooltip": "DAPLink_Download"
