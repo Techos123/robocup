@@ -389,7 +389,8 @@ import serial
 
 
 motion_serial = serial.Serial(
-    port="/dev/ttyUSB0",
+    port="/dev/ttyACM0",
+    # USB CDC 没有波特率概念，此参数仅为串口库占位，实际不生效
     baudrate=115200,
     bytesize=serial.EIGHTBITS,
     parity=serial.PARITY_NONE,
@@ -400,7 +401,7 @@ motion_serial = serial.Serial(
 )
 ```
 
-USB CDC设备在Linux上也可能枚举为`/dev/ttyACM0`。应使用系统实际识别出的设备路径，或者通过udev规则创建固定别名。
+USB CDC设备在Linux上通常枚举为`/dev/ttyACM0`，个别驱动或发行版下可能是`/dev/ttyACM1`等；应以系统实际识别出的设备为准，或者通过udev规则创建固定别名。Windows下枚举为`COMx`。
 
 ### 6.3 发送速度
 

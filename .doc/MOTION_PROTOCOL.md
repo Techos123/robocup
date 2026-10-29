@@ -19,19 +19,23 @@ IMU 由下位机独立采集和使用。X5 不通过该串口发送 yaw 或其�
 
 ## 2. 物理层
 
+通信链路为 **USB CDC 虚拟串口**：X5 直接连接下位机的 STM32 USB 设备口，中间不经过 USB-UART 模块，也不占用下位机任何 UART。
+
 | 参数 | 约定 |
 | --- | --- |
-| X5 接口 | USB 串口，默认 `/dev/ttyUSB0` |
-| 下位机接口 | 通过 USB-UART 模块连接下位机 UART |
-| 波特率 | `115200 bit/s` |
-| 数据位 | 8 bit |
-| 校验位 | 无（None） |
-| 停止位 | 1 bit |
-| 数据格式 | 8N1 |
-| 硬件流控 | 无 |
-| 软件流控 | 无 |
+| X5 接口 | USB CDC 虚拟串口，Linux 枚举为 `/dev/ttyACM0`，Windows 枚举为 `COMx` |
+| 下位机接口 | STM32H723VGT6 `USB_OTG_HS`（PA11/PA12，内建 PHY，`Device_Only_FS`，USB 2.0 全速 12 Mbit/s） |
+| 设备类 | CDC ACM，描述符由 `USB_DEVICE` 配置生成 |
+| 波特率 | 不适用：USB CDC 没有波特率概念，主机侧串口库传入的 `115200` 仅作占位、不生效 |
+| 数据位 / 校验位 / 停止位 | 不适用：`8N1` 等参数只是串口库调用签名要求，链路层不传输起止位与校验位 |
+| 硬件流控 | 无（无 RTS/CTS） |
+| 软件流控 | 无（无 XON/XOFF） |
+| 缓冲 | CDC 收/发缓冲各 2048 字节（`APP_RX_DATA_SIZE` / `APP_TX_DATA_SIZE`）；上层驱动缓冲 512 字节（`USB_BUFFER_SIZE`） |
+| 接线 | USB 线直连（VBUS/DM/DP/GND），不存在 TTL 电平匹配与 TX/RX 交叉问题 |
 
-UART TTL 电平由实际 USB-UART 模块和下位机硬件决定。接线前必须确认是 3.3V 还是 5V，并确保双方电平兼容、GND 共地、TX/RX 交叉连接。
+USB 全速设备的 CDC 批量端点单包为 64 字节，协议层按**连续字节流**处理，因此上位机必须按帧解析（见第 13 节），不能假设"一次 read 恰好是一帧"。
+
+> **兼容性说明**：V2.0 及更早版本的本文档把该链路描述为"USB-UART 模块 + `115200 8N1`"，与当前固件不符。下位机已改为 USB CDC 直连，`115200`、8N1、TTL 电平、TX/RX 交叉等描述均不再适用，仅为兼容现有上位机串口库的调用签名而保留参数位置。
 
 ## 3. 帧格式
 
@@ -374,8 +378,10 @@ V2.1 要求 X5 在任务启动流程中发送首次 START 二进制帧；之后�
 ## 17. 启动参数
 
 ```bash
+# USB CDC 直连：设备节点为 /dev/ttyACM0（Windows 为 COMx）
+# motion_baudrate 仅为兼容旧启动脚本保留，对 USB CDC 链路不生效
 /root/robocup_noimu_ws/run_robocup_noimu.sh \
-  motion_serial_port:=/dev/ttyUSB0 \
+  motion_serial_port:=/dev/ttyACM0 \
   motion_baudrate:=115200
 ```
 
@@ -385,6 +391,7 @@ V2.1 要求 X5 在任务启动流程中发送首次 START 二进制帧；之后�
 - 下位机初始化后默认失能；未增加 START 发送的旧版 X5 无法启动新版下位机的底盘。
 - X5 与下位机必须同时支持 V2.1 的首次 START 启动流程后再进行实车测试。
 - 本次修订保持 V2.1 和所有帧格式不变，后续 START 的语义由忽略改为 PID 重置。旧版下位机可能忽略后续 START；X5 重发或重连补发 START 时，应确认下位机支持的重置行为。
+- 物理层描述已按当前固件更正为 USB CDC 虚拟串口：旧文档中的 `115200 8N1`、USB-UART 模块、TTL 电平与 TX/RX 交叉接线均不再适用；帧格式与控制语义未变。
 - V1 ASCII 行协议已经删除。
 - X5 不会识别下位机返回的 ASCII `TURN_DONE`。
 - 下位机也不应等待 ASCII `START`、`VEL`、`STOP` 或 `TURN`。
