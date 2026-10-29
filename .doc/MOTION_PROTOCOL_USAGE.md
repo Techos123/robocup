@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 适用协议 | `MOTION_PROTOCOL.md` V2.0 |
+| 适用协议 | `MOTION_PROTOCOL.md` V2.1 |
 | 下位机协议类 | `Class_Motion_Protocol_USB` |
 | 下位机头文件 | `Code/2_Device/ROS/dvc_motion_protocol.h` |
 | 传输接口 | STM32 USB CDC虚拟串口 |

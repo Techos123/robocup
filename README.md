@@ -333,6 +333,3 @@ cmake --build --preset Release
 
 ---
 
-## 11. 致谢
-
-工程结构沿用 **USTC-RoboWalker** 的嵌入式框架（`Class_PID`、设备抽象、CAN/UART/USB 驱动设计），在此基础上扩展了四轮差速底盘解算、N100 航向锁定与运动协议实现。
